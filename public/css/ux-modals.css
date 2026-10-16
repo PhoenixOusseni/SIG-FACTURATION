@@ -1,0 +1,57 @@
+/* Persistent validation (never auto-hide via toast) */
+.alert-validation {
+    position: relative;
+}
+
+/* Out-of-stock product options */
+.option-out-of-stock,
+.select2-results__option--disabled .option-out-of-stock {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.select2-results__option[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed !important;
+}
+
+/* Fullscreen invoice create modal polish */
+.modal-fullscreen .modal-body {
+    background: #f8f9fc;
+}
+
+.modal-fullscreen .modal-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.modal-fullscreen .modal-footer {
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: #fff;
+}
+
+/* Select + quick-add button row */
+.select-with-add {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.select-with-add .select2-container,
+.select-with-add select {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.select-with-add .btn-quick-add {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* Nested quick-create modals above fullscreen parent */
+.modal-quick-create {
+    z-index: 1065;
+}
+
+.modal-backdrop.show + .modal-backdrop.show {
+    z-index: 1060;
+}

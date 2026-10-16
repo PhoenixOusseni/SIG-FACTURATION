@@ -1,0 +1,88 @@
+/* Page Header Styling with Watermark Background */
+
+.page-header {
+    position: relative;
+    background: linear-gradient(135deg, var(--primary-color, #315192) 0%, rgba(49, 81, 146, 0.8) 100%);
+    color: white;
+    overflow: hidden;
+}
+
+/* Filigrane background */
+.page-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 70%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.page-header::after {
+    content: '';
+    position: absolute;
+    bottom: -20%;
+    left: -5%;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 70%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Contenu au-dessus du filigrane */
+.page-header-content {
+    position: relative;
+    z-index: 2;
+}
+
+.page-header-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.page-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 0.75rem;
+    backdrop-filter: blur(10px);
+}
+
+.page-header-icon i {
+    width: 28px;
+    height: 28px;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .page-header-title {
+        font-size: 1.5rem;
+    }
+
+    .page-header::before {
+        width: 400px;
+        height: 400px;
+        right: -20%;
+    }
+
+    .page-header::after {
+        width: 300px;
+        height: 300px;
+        left: -10%;
+    }
+}

@@ -1,0 +1,148 @@
+/**
+ * Layout fixes + collapsible sidenav (icon-only mini mode on desktop)
+ * Works with SB Admin Pro base styles without forking the whole stylesheet.
+ */
+
+/* ── Content clear of fixed topnav ─────────────────────── */
+.nav-fixed #layoutSidenav #layoutSidenav_content {
+  top: 3.625rem;
+  /* Ensure first paint never sits under the top bar */
+  min-height: calc(100vh - 3.625rem);
+}
+
+/* Page headers must not be clipped by overflow hacks */
+#layoutSidenav_content > main {
+  overflow: visible;
+}
+#layoutSidenav_content .page-header {
+  position: relative;
+  z-index: 1;
+  overflow: visible !important; /* was hidden → clipped titles/actions */
+  margin-top: 0 !important;
+}
+#layoutSidenav_content .page-header .page-header-content {
+  position: relative;
+  z-index: 2;
+  padding-top: 0.75rem !important;
+}
+#layoutSidenav_content .page-header .page-header-title {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+/* Soften the overlapping card pull-up so titles stay readable */
+#layoutSidenav_content .mt-n10 {
+  margin-top: -3rem !important;
+  position: relative;
+  z-index: 2;
+}
+@media (max-width: 767.98px) {
+  #layoutSidenav_content .mt-n10 {
+    margin-top: -1.5rem !important;
+  }
+}
+
+/* ── Desktop: sidenav-toggled = MINI (icons only), not full hide ── */
+@media (min-width: 992px) {
+  body.nav-fixed.sidenav-toggled #layoutSidenav #layoutSidenav_nav {
+    transform: translateX(0) !important;
+    width: 4.25rem !important;
+    flex-basis: 4.25rem !important;
+    min-width: 4.25rem;
+  }
+
+  body.nav-fixed.sidenav-toggled #layoutSidenav #layoutSidenav_content {
+    margin-left: 0 !important;
+    padding-left: 4.25rem !important;
+    transition: padding-left 0.15s ease-in-out;
+  }
+
+  body.nav-fixed.sidenav-toggled #layoutSidenav #layoutSidenav_content:before {
+    display: none !important;
+  }
+
+  /* Smooth width transition when expanding/collapsing */
+  body.nav-fixed #layoutSidenav #layoutSidenav_nav {
+    transition: width 0.15s ease-in-out, flex-basis 0.15s ease-in-out, transform 0.15s ease-in-out;
+    overflow: hidden;
+  }
+  body.nav-fixed #layoutSidenav #layoutSidenav_content {
+    transition: padding-left 0.15s ease-in-out, margin 0.15s ease-in-out;
+  }
+
+  /* Hide labels / section titles / nested menus / footer text */
+  body.nav-fixed.sidenav-toggled .sidenav .sidenav-menu-heading,
+  body.nav-fixed.sidenav-toggled .sidenav .sidenav-collapse-arrow,
+  body.nav-fixed.sidenav-toggled .sidenav .sidenav-menu-nested,
+  body.nav-fixed.sidenav-toggled .sidenav .sidenav-footer .sidenav-footer-content {
+    display: none !important;
+  }
+
+  /* Collapse open state not useful in mini — hide panels */
+  body.nav-fixed.sidenav-toggled .sidenav .collapse {
+    display: none !important;
+  }
+
+  /* Center icons; hide text nodes via font-size */
+  body.nav-fixed.sidenav-toggled .sidenav .nav-link {
+    justify-content: center !important;
+    align-items: center;
+    padding: 0.85rem 0.25rem !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  body.nav-fixed.sidenav-toggled .sidenav .nav-link .nav-link-icon {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    font-size: 1.1rem !important;
+    line-height: 1 !important;
+    width: 1.5rem;
+    display: inline-flex !important;
+    justify-content: center;
+  }
+  body.nav-fixed.sidenav-toggled .sidenav .nav-link .nav-link-icon svg,
+  body.nav-fixed.sidenav-toggled .sidenav .nav-link .nav-link-icon i {
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+    font-size: 1.1rem !important;
+  }
+
+  /* Nested accordion parents still clickable — expand sidebar on click (JS) */
+  body.nav-fixed.sidenav-toggled .sidenav .nav-link[data-bs-toggle="collapse"] {
+    cursor: pointer;
+  }
+
+  /* Compact footer strip */
+  body.nav-fixed.sidenav-toggled .sidenav .sidenav-footer {
+    min-height: 2.5rem;
+    padding: 0.35rem 0;
+  }
+}
+
+/* Tooltip-like title hint for mini mode (native title still used) */
+body.nav-fixed.sidenav-toggled .sidenav .nav-link {
+  position: relative;
+}
+
+/* ── Mobile: keep classic hide/show overlay behavior ────── */
+@media (max-width: 991.98px) {
+  /* unchanged SB Admin behavior via styles.css */
+}
+
+/* ── Toggle button active state ────────────────────────── */
+body.sidenav-toggled .topnav-pro #sidebarToggle {
+  background: #eef2fb;
+  color: #1d3f7f;
+  border-color: #d0d9f0;
+}
+
+/* ── POS full-bleed under content column only ──────────── */
+#layoutSidenav_content main.pos-main {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+}
+#layoutSidenav_content main.pos-main .pos-page {
+  min-height: calc(100vh - 3.625rem - 1rem);
+}

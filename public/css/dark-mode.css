@@ -1,0 +1,617 @@
+/* ================================================
+   DARK MODE - SIG CFE
+   Activé via : <html data-theme="dark">
+   ================================================ */
+
+/* -----------------------------------------------
+   1. VARIABLES CSS — remplace les valeurs light
+   ----------------------------------------------- */
+[data-theme="dark"] {
+    --bg-light:   #0f172a;
+    --bg-white:   #1e293b;
+    --text-dark:  #e2e8f0;
+    --text-light: #94a3b8;
+    --border-color: #334155;
+    --primary-color: #4a7fd4;
+    --primary-light: #6a9fd8;
+    --shadow-xs: 0 1px 2px 0 rgba(0,0,0,.3);
+    --shadow-sm: 0 1px 3px 0 rgba(0,0,0,.4), 0 1px 2px 0 rgba(0,0,0,.3);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.4), 0 2px 4px -1px rgba(0,0,0,.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.4), 0 4px 6px -2px rgba(0,0,0,.2);
+    --shadow-xl: 0 20px 25px -5px rgba(0,0,0,.4), 0 10px 10px -5px rgba(0,0,0,.2);
+}
+
+/* -----------------------------------------------
+   2. TRANSITION GLOBALE lors du switch
+   ----------------------------------------------- */
+[data-theme="dark"] *,
+[data-theme="light"] * {
+    transition:
+        background-color .25s ease,
+        border-color .25s ease,
+        color .15s ease,
+        box-shadow .25s ease !important;
+}
+
+/* -----------------------------------------------
+   3. BODY / HTML
+   ----------------------------------------------- */
+[data-theme="dark"] body {
+    background-color: var(--bg-light);
+    color: var(--text-dark);
+}
+
+/* -----------------------------------------------
+   4. TOP NAVIGATION
+   ----------------------------------------------- */
+[data-theme="dark"] .topnav.topnav-pro {
+    background: #1e293b !important;
+    border-bottom-color: #334155 !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,.35) !important;
+}
+
+/* Brand */
+[data-theme="dark"] .topnav-pro .navbar-brand {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .topnav-pro .brand-text small {
+    color: #94a3b8;
+}
+
+/* Sidebar toggle */
+[data-theme="dark"] .topnav-pro #sidebarToggle {
+    color: #94a3b8;
+}
+[data-theme="dark"] .topnav-pro #sidebarToggle:hover {
+    background: #263147;
+    color: #60a5fa;
+    border-color: #334155;
+}
+
+/* Recherche */
+[data-theme="dark"] .topnav-pro .topnav-search input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .topnav-pro .topnav-search input::placeholder {
+    color: #64748b;
+}
+[data-theme="dark"] .topnav-pro .topnav-search input:focus {
+    background: #1e293b;
+    border-color: #4a7fd4;
+    box-shadow: 0 0 0 .2rem rgba(74,127,212,.2);
+}
+
+/* Boutons icônes */
+[data-theme="dark"] .topnav-pro .nav-icon-btn {
+    color: #94a3b8;
+    background: #263147;
+    border-color: #334155;
+}
+[data-theme="dark"] .topnav-pro .nav-icon-btn:hover {
+    background: #1e293b;
+    color: #60a5fa;
+    border-color: #4a7fd4;
+    box-shadow: 0 6px 14px rgba(74,127,212,.2);
+}
+[data-theme="dark"] .topnav-pro .nav-icon-btn .badge-dot {
+    border-color: #1e293b;
+}
+
+/* Séparateur */
+[data-theme="dark"] .topnav-pro .nav-divider {
+    background: #334155;
+}
+
+/* User pill */
+[data-theme="dark"] .topnav-pro .user-pill {
+    background: #263147;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .topnav-pro .user-pill:hover {
+    background: #1e293b;
+    border-color: #4a7fd4;
+    box-shadow: 0 6px 14px rgba(74,127,212,.15);
+}
+[data-theme="dark"] .topnav-pro .user-meta .user-name {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .topnav-pro .user-meta .user-role {
+    color: #94a3b8;
+}
+[data-theme="dark"] .topnav-pro .user-pill svg.chevron {
+    color: #64748b;
+}
+
+/* Dropdown utilisateur */
+[data-theme="dark"] .user-dropdown-menu {
+    background: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 20px 50px rgba(0,0,0,.45);
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-header {
+    background: linear-gradient(135deg, #263147 0%, #1e3a5f 100%);
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-user-details-name {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-user-details-email a {
+    color: #60a5fa;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-item {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-item:hover {
+    background: #263147;
+    color: #60a5fa;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-item .dropdown-item-icon {
+    background: #334155;
+    color: #94a3b8;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-item:hover .dropdown-item-icon {
+    background: #4a7fd4;
+    color: #fff;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-item.text-danger:hover {
+    background: #2d1b1b;
+    color: #f87171;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-item.text-danger:hover .dropdown-item-icon {
+    background: #dc2626;
+    color: #fff;
+}
+[data-theme="dark"] .user-dropdown-menu .dropdown-divider {
+    border-color: #334155;
+}
+
+/* -----------------------------------------------
+   5. SIDEBAR (SB Admin 2 — sidenav-light)
+   ----------------------------------------------- */
+[data-theme="dark"] .sidenav {
+    background: #1e293b !important;
+}
+[data-theme="dark"] .sidenav .sidenav-menu-heading {
+    color: #64748b !important;
+}
+[data-theme="dark"] .sidenav .nav-link {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .sidenav .nav-link:hover,
+[data-theme="dark"] .sidenav .nav-link:focus {
+    color: #e2e8f0 !important;
+    background: rgba(255,255,255,.05) !important;
+}
+[data-theme="dark"] .sidenav .nav-link.active {
+    color: #60a5fa !important;
+    background: rgba(74,127,212,.12) !important;
+}
+[data-theme="dark"] .sidenav .nav-link-icon {
+    color: inherit !important;
+}
+[data-theme="dark"] .sidenav .sidenav-menu-nested .nav-link {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .sidenav .sidenav-menu-nested .nav-link:hover {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .sidenav .sidenav-collapse-arrow {
+    color: #64748b !important;
+}
+[data-theme="dark"] #layoutSidenav_nav {
+    background: #1e293b;
+}
+
+/* -----------------------------------------------
+   6. CARDS
+   ----------------------------------------------- */
+[data-theme="dark"] .card {
+    background-color: #1e293b;
+    border-color: #334155;
+}
+[data-theme="dark"] .card-body {
+    color: var(--text-dark);
+}
+[data-theme="dark"] .card-footer {
+    background-color: #263147;
+    border-top-color: #334155;
+}
+
+/* -----------------------------------------------
+   7. TABLES
+   ----------------------------------------------- */
+[data-theme="dark"] .table {
+    color: #cbd5e1;
+    border-color: #334155;
+}
+[data-theme="dark"] .table tbody td {
+    border-bottom-color: #334155;
+    background-color: transparent;
+}
+[data-theme="dark"] .table tbody tr:hover {
+    background-color: #263147 !important;
+}
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255,255,255,.025);
+}
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd):hover {
+    background-color: #263147 !important;
+}
+[data-theme="dark"] .table-bordered,
+[data-theme="dark"] .table-bordered td,
+[data-theme="dark"] .table-bordered th {
+    border-color: #334155;
+}
+[data-theme="dark"] .table-responsive {
+    background: transparent;
+}
+/* DataTable spécifique */
+[data-theme="dark"] .dataTables_wrapper {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_length select,
+[data-theme="dark"] .dataTables_wrapper .dataTables_filter input {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_info {
+    color: #94a3b8;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #263147 !important;
+    color: #e2e8f0 !important;
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: #4a7fd4 !important;
+    color: #fff !important;
+    border-color: #4a7fd4 !important;
+}
+
+/* -----------------------------------------------
+   8. FORMULAIRES
+   ----------------------------------------------- */
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+    background-color: #1e293b;
+    border-color: #4a7fd4;
+    color: #e2e8f0;
+    box-shadow: 0 0 0 .2rem rgba(74,127,212,.25);
+}
+[data-theme="dark"] .form-control::placeholder {
+    color: #64748b;
+}
+[data-theme="dark"] .form-control:disabled,
+[data-theme="dark"] .form-select:disabled {
+    background-color: #263147;
+    color: #64748b;
+}
+[data-theme="dark"] .form-label {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .input-group-text {
+    background-color: #263147;
+    color: #94a3b8;
+    border-color: #334155;
+}
+[data-theme="dark"] .form-check-input {
+    background-color: #0f172a;
+    border-color: #334155;
+}
+[data-theme="dark"] .form-check-input:checked {
+    background-color: #4a7fd4;
+    border-color: #4a7fd4;
+}
+[data-theme="dark"] .form-check-label {
+    color: #cbd5e1;
+}
+
+/* Select2 */
+[data-theme="dark"] .select2-container .select2-selection--single,
+[data-theme="dark"] .select2-container .select2-selection--multiple {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .select2-container .select2-selection--single .select2-selection__rendered {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .select2-container .select2-selection--single .select2-selection__placeholder {
+    color: #64748b !important;
+}
+[data-theme="dark"] .select2-dropdown {
+    background: #1e293b;
+    border-color: #334155;
+}
+[data-theme="dark"] .select2-results__option {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .select2-results__option--highlighted {
+    background: #263147 !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .select2-search--dropdown .select2-search__field {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+/* -----------------------------------------------
+   9. MODALS
+   ----------------------------------------------- */
+[data-theme="dark"] .modal-content {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .modal-header {
+    border-bottom-color: #334155;
+}
+[data-theme="dark"] .modal-footer {
+    border-top-color: #334155;
+    background-color: #263147;
+}
+[data-theme="dark"] .modal-backdrop {
+    background-color: #000;
+}
+[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(1) brightness(2);
+}
+
+/* -----------------------------------------------
+   10. DROPDOWNS (Bootstrap)
+   ----------------------------------------------- */
+[data-theme="dark"] .dropdown-menu {
+    background-color: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+[data-theme="dark"] .dropdown-item {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .dropdown-item:hover,
+[data-theme="dark"] .dropdown-item:focus {
+    background-color: #263147;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .dropdown-divider {
+    border-color: #334155;
+}
+[data-theme="dark"] .dropdown-header {
+    color: #94a3b8;
+}
+
+/* -----------------------------------------------
+   11. ALERTS
+   ----------------------------------------------- */
+[data-theme="dark"] .alert-success {
+    background-color: #14291e;
+    color: #6ee7b7;
+    border-color: #1f4232;
+}
+[data-theme="dark"] .alert-danger {
+    background-color: #2d1414;
+    color: #fca5a5;
+    border-color: #4b1c1c;
+}
+[data-theme="dark"] .alert-warning {
+    background-color: #2a1f08;
+    color: #fde68a;
+    border-color: #453212;
+}
+[data-theme="dark"] .alert-info {
+    background-color: #0d2233;
+    color: #7dd3fc;
+    border-color: #163347;
+}
+
+/* -----------------------------------------------
+   12. BADGES
+   ----------------------------------------------- */
+[data-theme="dark"] .badge.bg-light {
+    background-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .badge.bg-secondary {
+    background-color: #475569 !important;
+}
+
+/* -----------------------------------------------
+   13. BOUTONS secondaires / light / outline
+   ----------------------------------------------- */
+[data-theme="dark"] .btn-secondary {
+    background: #334155;
+    color: #e2e8f0;
+    border-color: #475569;
+}
+[data-theme="dark"] .btn-secondary:hover {
+    background: #475569;
+    color: #fff;
+}
+[data-theme="dark"] .btn-light {
+    background: #263147;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+[data-theme="dark"] .btn-light:hover {
+    background: #334155;
+    color: #fff;
+}
+[data-theme="dark"] .btn-outline-secondary {
+    color: #94a3b8;
+    border-color: #475569;
+}
+[data-theme="dark"] .btn-outline-secondary:hover {
+    background: #334155;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+/* -----------------------------------------------
+   14. BREADCRUMBS
+   ----------------------------------------------- */
+[data-theme="dark"] .breadcrumb {
+    background-color: #263147;
+}
+[data-theme="dark"] .breadcrumb-item a {
+    color: #60a5fa;
+}
+[data-theme="dark"] .breadcrumb-item.active {
+    color: #94a3b8;
+}
+[data-theme="dark"] .breadcrumb-item + .breadcrumb-item::before {
+    color: #64748b;
+}
+
+/* -----------------------------------------------
+   15. PAGINATION
+   ----------------------------------------------- */
+[data-theme="dark"] .page-link {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+}
+[data-theme="dark"] .page-link:hover {
+    background-color: #263147;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .page-item.active .page-link {
+    background-color: #4a7fd4;
+    border-color: #4a7fd4;
+    color: #fff;
+}
+[data-theme="dark"] .page-item.disabled .page-link {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #475569;
+}
+
+/* -----------------------------------------------
+   16. LISTE GROUP
+   ----------------------------------------------- */
+[data-theme="dark"] .list-group-item {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .list-group-item:hover {
+    background-color: #263147;
+}
+[data-theme="dark"] .list-group-item.active {
+    background-color: #4a7fd4;
+    border-color: #4a7fd4;
+}
+
+/* -----------------------------------------------
+   17. TABLEAUX de bord / INLINE styles overrides
+   ----------------------------------------------- */
+/* Styles définis inline dans style.blade.php & master.blade.php */
+[data-theme="dark"] table thead {
+    background-color: #1d3f7f !important;
+}
+[data-theme="dark"] .header-gradient {
+    background-color: #1d3f7f !important;
+}
+/* .btn-1 reste identique (bleu foncé) */
+
+/* Overrides SB Admin layout */
+[data-theme="dark"] #layoutSidenav_content {
+    background-color: #0f172a;
+}
+[data-theme="dark"] .bg-white {
+    background-color: #1e293b !important;
+}
+[data-theme="dark"] .bg-light {
+    background-color: #0f172a !important;
+}
+[data-theme="dark"] .text-dark {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .text-muted {
+    color: #64748b !important;
+}
+[data-theme="dark"] .border {
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .border-bottom {
+    border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .border-top {
+    border-top-color: #334155 !important;
+}
+[data-theme="dark"] hr {
+    border-color: #334155;
+    opacity: 1;
+}
+
+/* -----------------------------------------------
+   18. FOOTER
+   ----------------------------------------------- */
+[data-theme="dark"] footer,
+[data-theme="dark"] .footer {
+    background-color: #1e293b !important;
+    border-top-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .footer a {
+    color: #60a5fa;
+}
+
+/* -----------------------------------------------
+   19. BOUTON TOGGLE THÈME
+   ----------------------------------------------- */
+.theme-toggle-btn {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    cursor: pointer;
+    transition: all .2s ease;
+    padding: 0;
+}
+.theme-toggle-btn:hover {
+    background: #fff;
+    color: #f59e0b;
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(245,158,11,.2);
+}
+[data-theme="dark"] .theme-toggle-btn {
+    background: #263147;
+    border-color: #334155;
+    color: #94a3b8;
+}
+[data-theme="dark"] .theme-toggle-btn:hover {
+    background: #1e293b;
+    color: #fbbf24;
+    border-color: #fbbf24;
+    box-shadow: 0 6px 14px rgba(251,191,36,.2);
+}
+.theme-toggle-btn svg {
+    width: 18px;
+    height: 18px;
+    transition: transform .4s cubic-bezier(.34,1.56,.64,1), opacity .2s ease;
+}
+.theme-toggle-btn .icon-moon { display: block; }
+.theme-toggle-btn .icon-sun  { display: none;  }
+[data-theme="dark"] .theme-toggle-btn .icon-moon { display: none;  }
+[data-theme="dark"] .theme-toggle-btn .icon-sun  { display: block; }

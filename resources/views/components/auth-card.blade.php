@@ -1,0 +1,1 @@
+<div class="min-h-screen d-flex align-items-center justify-content-center"><div class="card shadow-sm" style="width:100%;max-width:440px"><div class="card-body p-4">{{ $logo ?? '' }}{{ $slot }}</div></div></div>

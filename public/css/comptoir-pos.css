@@ -1,0 +1,524 @@
+/**
+ * Facturation Comptoir — compact POS chrome aligned with SIG app
+ * Tokens: #1d3f7f / --primary-color (#315192), dense 11–13px UI
+ */
+
+.pos-page {
+  --pos-primary: var(--primary-color, #1d3f7f);
+  --pos-primary-dark: #16305f;
+  --pos-border: #e2e8f0;
+  --pos-muted: #6c757d;
+  --pos-bg: #f4f6fb;
+  --pos-danger: #c0392b;
+  --pos-success: #1e7e34;
+  --pos-warn: #b78103;
+  --pos-row-h: 28px;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  background: var(--pos-bg);
+  font-size: 12.5px;
+  min-height: calc(100vh - 3.625rem - 2rem);
+}
+
+/* ── Session bar ───────────────────────────────────────── */
+.pos-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  padding: 0.3rem 0.65rem;
+  min-height: 36px;
+  background: linear-gradient(90deg, #1d3f7f 0%, #315192 100%);
+  color: #fff;
+  border-bottom: 2px solid #16305f;
+}
+
+.pos-bar .pos-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.15);
+}
+.pos-bar .pos-pill.ouverte { background: #1e7e34; }
+.pos-bar .pos-pill.en_arret { background: #b78103; }
+.pos-bar .pos-pill.none { background: #6c757d; }
+
+.pos-bar .pos-meta {
+  font-size: 11.5px;
+  opacity: 0.95;
+  white-space: nowrap;
+}
+.pos-bar .pos-meta strong { font-weight: 700; }
+
+.pos-bar-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.pos-bar-actions .btn {
+  padding: 0.15rem 0.45rem !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  border-radius: 3px !important;
+  font-weight: 600;
+}
+
+/* ── Grid ──────────────────────────────────────────────── */
+.pos-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.05fr) minmax(260px, 1.35fr) minmax(200px, 0.9fr);
+  gap: 0.4rem;
+  padding: 0.4rem;
+  align-items: stretch;
+  min-height: calc(100vh - 3.625rem - 4.5rem);
+}
+
+@media (max-width: 1200px) {
+  .pos-grid { grid-template-columns: 1fr 1fr; }
+  .pos-col-meta { grid-column: 1 / -1; }
+}
+@media (max-width: 768px) {
+  .pos-grid { grid-template-columns: 1fr; min-height: auto; }
+}
+
+.pos-col {
+  background: #fff;
+  border: 1px solid var(--pos-border);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(29, 63, 127, 0.06);
+}
+
+.pos-col-hd {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.45rem;
+  background: #1d3f7f;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-height: 28px;
+}
+.pos-col-hd .ms-auto { margin-left: auto; }
+.pos-col-hd .btn {
+  padding: 0.1rem 0.35rem !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+.pos-col-bd {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.25rem;
+}
+
+/* ── Search / inputs ───────────────────────────────────── */
+.pos-toolbar {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.3rem 0.35rem;
+  border-bottom: 1px solid var(--pos-border);
+  background: #fafbfd;
+  align-items: center;
+}
+.pos-toolbar input,
+.pos-toolbar select {
+  font-size: 12px !important;
+  padding: 0.2rem 0.35rem !important;
+  height: 28px;
+  border-radius: 3px !important;
+  border: 1px solid #ced4da;
+  flex: 1;
+  min-width: 0;
+}
+.pos-toolbar input:focus,
+.pos-field input:focus,
+.pos-field select:focus {
+  border-color: #1d3f7f;
+  box-shadow: 0 0 0 2px rgba(29, 63, 127, 0.12);
+  outline: none;
+}
+.pos-toolbar .btn {
+  height: 28px;
+  padding: 0 0.4rem !important;
+  font-size: 11px !important;
+  white-space: nowrap;
+}
+
+.pos-hint {
+  font-size: 10px;
+  color: var(--pos-muted);
+  padding: 0.15rem 0.4rem 0.25rem;
+}
+
+/* ── Product list (dense) ──────────────────────────────── */
+.pos-prod-list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.pos-prod-list thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #1d3f7f !important;
+  color: #fff !important;
+  font-size: 10px !important;
+  text-transform: uppercase;
+  padding: 3px 6px !important;
+  font-weight: 700;
+}
+.pos-prod-list tbody tr {
+  cursor: pointer;
+  height: var(--pos-row-h);
+}
+.pos-prod-list tbody tr:nth-child(odd) { background: #fafbfd; }
+.pos-prod-list tbody tr:hover { background: #eef2fb !important; }
+.pos-prod-list tbody td {
+  padding: 2px 6px !important;
+  border-bottom: 1px solid #eef1f5;
+  vertical-align: middle;
+}
+.pos-prod-list .p-code { color: var(--pos-muted); font-size: 10.5px; white-space: nowrap; }
+.pos-prod-list .p-name {
+  font-weight: 600;
+  color: #1a1a2e;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pos-prod-list .p-price { font-weight: 700; color: #1d3f7f; white-space: nowrap; text-align: right; }
+.pos-prod-list .p-stock { text-align: right; font-size: 10.5px; color: var(--pos-muted); white-space: nowrap; }
+.pos-prod-list tr.oos { opacity: 0.45; }
+.pos-prod-list tr.oos .p-stock { color: var(--pos-danger); font-weight: 600; }
+
+/* ── Cart ──────────────────────────────────────────────── */
+.pos-cart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.pos-cart-table thead th {
+  background: #1d3f7f !important;
+  color: #fff !important;
+  font-size: 10px !important;
+  text-transform: uppercase;
+  padding: 3px 5px !important;
+  position: sticky;
+  top: 0;
+}
+.pos-cart-table tbody td {
+  padding: 2px 5px !important;
+  border-bottom: 1px solid #eef1f5;
+  vertical-align: middle;
+}
+.pos-cart-table tbody tr.selected { background: #e8eef8 !important; }
+.pos-cart-table tbody tr:hover { background: #f4f6fb; }
+.pos-cart-table .c-name { font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos-cart-table .c-sub { font-size: 10px; color: var(--pos-muted); }
+.pos-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.pos-qty button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #ced4da;
+  background: #fff;
+  border-radius: 2px;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pos-qty button:hover { background: #eef2fb; border-color: #1d3f7f; }
+.pos-qty .q {
+  min-width: 1.6rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+.pos-cart-table .btn-x {
+  border: 0;
+  background: transparent;
+  color: var(--pos-danger);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 14px;
+}
+
+.pos-totals {
+  border-top: 1px solid var(--pos-border);
+  padding: 0.35rem 0.5rem;
+  background: #fafbfd;
+  font-size: 11.5px;
+}
+.pos-totals .tr {
+  display: flex;
+  justify-content: space-between;
+  padding: 1px 0;
+  color: #495057;
+}
+.pos-totals .tr.ttc {
+  margin-top: 0.25rem;
+  padding-top: 0.3rem;
+  border-top: 1px dashed #ced4da;
+  font-weight: 800;
+  font-size: 14px;
+  color: #1d3f7f;
+}
+
+/* ── Meta column ───────────────────────────────────────── */
+.pos-fields {
+  padding: 0.35rem 0.45rem;
+  display: grid;
+  gap: 0.3rem;
+  border-bottom: 1px solid var(--pos-border);
+}
+.pos-field label {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--pos-muted);
+  margin-bottom: 0.1rem;
+}
+.pos-field input,
+.pos-field select {
+  width: 100%;
+  font-size: 12px;
+  padding: 0.2rem 0.35rem;
+  height: 28px;
+  border: 1px solid #ced4da;
+  border-radius: 3px;
+}
+.pos-field-row {
+  display: flex;
+  gap: 0.25rem;
+  align-items: stretch;
+}
+.pos-field-row input { flex: 1; }
+.pos-field-row .btn {
+  height: 28px;
+  padding: 0 0.4rem !important;
+  font-size: 11px !important;
+}
+
+.pos-client-dd {
+  position: absolute;
+  z-index: 30;
+  left: 0; right: 0;
+  top: 100%;
+  background: #fff;
+  border: 1px solid var(--pos-border);
+  border-radius: 3px;
+  max-height: 160px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  display: none;
+}
+.pos-client-dd.open { display: block; }
+.pos-client-dd div {
+  padding: 0.3rem 0.45rem;
+  cursor: pointer;
+  font-size: 11.5px;
+}
+.pos-client-dd div:hover { background: #eef2fb; }
+.pos-client-wrap { position: relative; }
+
+.pos-held-hd {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--pos-muted);
+  padding: 0.25rem 0.45rem 0.1rem;
+}
+.pos-held {
+  max-height: 110px;
+  overflow-y: auto;
+  border-top: 1px solid var(--pos-border);
+  background: #fafbfd;
+}
+.pos-held-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.45rem;
+  font-size: 11px;
+  border-bottom: 1px solid #eef1f5;
+  cursor: pointer;
+}
+.pos-held-item:hover { background: #fff3cd; }
+.pos-held-item .code { font-weight: 700; color: #1d3f7f; }
+
+.pos-actions {
+  margin-top: auto;
+  padding: 0.35rem;
+  display: grid;
+  gap: 0.25rem;
+  border-top: 1px solid var(--pos-border);
+  background: #fff;
+}
+.pos-actions .btn {
+  font-size: 12px !important;
+  font-weight: 700;
+  padding: 0.4rem 0.5rem !important;
+  border-radius: 3px !important;
+}
+.pos-actions .btn-pay {
+  background: linear-gradient(135deg, #1e7e34, #28a745);
+  border-color: #1e7e34;
+  color: #fff;
+  font-size: 13px !important;
+  padding: 0.5rem !important;
+}
+.pos-actions .btn-pay:hover:not(:disabled) { filter: brightness(1.05); color: #fff; }
+.pos-actions .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Empty / blocker ───────────────────────────────────── */
+.pos-empty {
+  padding: 1.25rem 0.75rem;
+  text-align: center;
+  color: var(--pos-muted);
+  font-size: 12px;
+}
+
+.pos-blocker {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(244, 246, 251, 0.92);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  border-radius: 4px;
+}
+.pos-blocker.show { display: flex; }
+.pos-blocker-inner {
+  background: #fff;
+  border: 1px solid var(--pos-border);
+  border-radius: 4px;
+  padding: 1.25rem 1.5rem;
+  max-width: 360px;
+  box-shadow: 0 4px 16px rgba(29, 63, 127, 0.12);
+}
+.pos-blocker-inner h3 {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1d3f7f;
+  margin: 0 0 0.35rem;
+}
+.pos-shell { position: relative; }
+
+/* ── Toast ─────────────────────────────────────────────── */
+.pos-toast {
+  position: fixed;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2000;
+  min-width: 220px;
+  max-width: 380px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 3px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+  display: none;
+}
+.pos-toast.show { display: block; }
+.pos-toast.ok { background: #1e7e34; }
+.pos-toast.err { background: #c0392b; }
+
+/* ── Pay / session modals (dense) ──────────────────────── */
+.pos-modal .modal-header {
+  background: #1d3f7f;
+  color: #fff;
+  padding: 0.45rem 0.75rem;
+}
+.pos-modal .modal-title { font-size: 14px; font-weight: 700; }
+.pos-modal .modal-header .btn-close { filter: invert(1); opacity: 0.85; }
+.pos-modal .modal-body { padding: 0.75rem; font-size: 12.5px; }
+.pos-modal .modal-footer { padding: 0.45rem 0.75rem; }
+.pos-modal .form-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--pos-muted);
+  margin-bottom: 0.15rem;
+}
+.pos-modal .form-control,
+.pos-modal .form-select {
+  font-size: 12.5px;
+  padding: 0.3rem 0.45rem;
+  height: auto;
+  min-height: 32px;
+}
+.pos-pay-sum {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.5rem;
+  background: #f4f6fb;
+  border: 1px solid var(--pos-border);
+  border-radius: 3px;
+  font-size: 12px;
+  margin-top: 0.4rem;
+}
+.pos-pay-sum .ttc-big {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1d3f7f;
+}
+.pos-change {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 3px;
+  margin-top: 0.35rem;
+  font-weight: 700;
+  color: #1e7e34;
+}
+.pos-pay-line {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr auto;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+  align-items: end;
+}
+
+/* Hide default page chrome padding fight */
+#layoutSidenav_content main.pos-main {
+  padding-bottom: 0;
+}
+/* When POS is open, tighten container if master wraps content */
+.pos-page .container-xl,
+.pos-page .container-fluid {
+  max-width: 100%;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
