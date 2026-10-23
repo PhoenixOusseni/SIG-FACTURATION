@@ -49,8 +49,8 @@
                     </div>
                     @if ($collection->count() > 0)
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
+                            <table class="table table-hover align-middle mb-0" id="avoirsTable">
+                                <thead class="table-light">
                                     <tr>
                                         <th>Code</th>
                                         <th>Référence</th>
@@ -96,7 +96,7 @@
                                             </td>
                                             <td>{{ $avoir->Contribuable->assujeti ?? 'N/A' }}</td>
                                             <td>{{ $avoir->Facture->code ?? 'N/A' }}</td>
-                                            <td>{{ $avoir->date ?? 'N/A' }}</td>
+                                            <td data-order="{{ $avoir->date ? \Carbon\Carbon::parse($avoir->date)->format('Y-m-d') : '1970-01-01' }}">{{ $avoir->date ? \Carbon\Carbon::parse($avoir->date)->format('d/m/Y') : 'N/A' }}</td>
                                             <td class="text-center">
                                                 <a href="{{ route('module_facture_avoir.show', [$avoir->id]) }}"
                                                     class="btn btn-sm btn-primary"
@@ -572,7 +572,10 @@
             }
 
             let pct = 0;
-            const totalOrigHt = fact.lignes.reduce((acc, l) => acc + (parseFloat(l.quantite) * parseFloat(l.prix_unitaire)), 0);
+            const totalOrigHt = fact.lignes.reduce((acc, l) => {
+                const qRest = l.quantite_restante !== undefined ? parseFloat(l.quantite_restante) : parseFloat(l.quantite);
+                return acc + (qRest * (parseFloat(l.prix_unitaire) || 0));
+            }, 0);
 
             if (unit === 'pourcentage') {
                 pct = Math.min(100, val);
@@ -585,8 +588,9 @@
                 if (origLigne) {
                     const origPu = parseFloat(origLigne.prix_unitaire) || 0;
                     const rabaisPu = Math.round((origPu * (pct / 100)) * 100) / 100;
+                    const qRest = origLigne.quantite_restante !== undefined ? origLigne.quantite_restante : origLigne.quantite;
                     $(this).find('.prix-input').val(rabaisPu).trigger('input');
-                    $(this).find('.qte-input').val(origLigne.quantite).prop('readonly', true).addClass('bg-light');
+                    $(this).find('.qte-input').val(qRest).prop('readonly', true).addClass('bg-light');
                 }
             });
 
@@ -659,11 +663,30 @@
             const reste = activeFactureReste;
 
             if (!activeFactureTotal) {
-                $('#mainAvoirTreasuryNotice').html('Sélectionnez une facture d\'origine pour afficher l\'analyse financière.').removeClass('alert-warning alert-info').addClass('alert-light');
+                $('#mainAvoirTreasuryNotice').html('Sélectionnez une facture d\'origine pour afficher l\'analyse financière.').removeClass('alert-warning alert-info alert-danger').addClass('alert-light');
                 $('#mainAvoirRefundSection').hide();
                 $('#main_effectuer_remboursement').prop('checked', false);
                 $('#mainAvoirRefundFields').hide();
                 return;
+            }
+
+            // Vérification de dépassement du solde disponible
+            const fId = $('#facture_id').val();
+            const fact = facturesData[fId];
+            if (fact) {
+                const soldeDispo = parseFloat(fact.solde_disponible) || 0;
+                if (totalAvoir > (soldeDispo + 0.009)) {
+                    $('#mainAvoirTreasuryNotice').html(`
+                        <div class="d-flex align-items-center text-danger">
+                            <i class="fas fa-exclamation-triangle me-2 fs-5"></i>
+                            <div><strong>Dépassement du solde éligible :</strong> Le montant de l'avoir (${new Intl.NumberFormat('fr-FR').format(totalAvoir)} F) dépasse le solde disponible sur cette facture (${new Intl.NumberFormat('fr-FR').format(soldeDispo)} F). Veuillez réduire les quantités.</div>
+                        </div>
+                    `).removeClass('alert-warning alert-info alert-light alert-primary').addClass('alert-danger');
+                    $('#avoirCreateForm button[type=submit], button[form=avoirCreateForm]').prop('disabled', true);
+                    return;
+                } else if (totalAvoir > 0) {
+                    $('#avoirCreateForm button[type=submit], button[form=avoirCreateForm]').prop('disabled', false);
+                }
             }
 
             if (paye <= 0.009) {
@@ -735,6 +758,31 @@
                 $('#cardOrigineSoldeDispo').text(new Intl.NumberFormat('fr-FR').format(data.solde_disponible || 0) + ' XOF');
                 $('#avoirOrigineDetailsCard').slideDown();
 
+                // Gestion RAN si la facture a déjà subi un avoir
+                $('#havingRanAlert').remove();
+                if (data.can_ran === false) {
+                    $('#nature_avoir option[value="RAN"]').prop('disabled', true);
+                    if ($('#nature_avoir').val() === 'RAN') {
+                        $('#nature_avoir').val('RAM');
+                    }
+                    $('#nature_avoir').after(`
+                        <div id="havingRanAlert" class="alert alert-warning py-1.5 px-2.5 small mt-1.5 mb-0 d-flex align-items-center">
+                            <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+                            <div><strong>Annulation Totale (RAN) verrouillée :</strong> Cette facture a déjà fait l'objet d'un avoir partiel. Seuls les avoirs partiels (RAM, RRR ou COR) sur le reliquat restant sont autorisés.</div>
+                        </div>
+                    `);
+                } else {
+                    $('#nature_avoir option[value="RAN"]').prop('disabled', false);
+                }
+
+                // Vérification du solde disponible
+                if (parseFloat(data.solde_disponible) <= 0.009) {
+                    showStickyFormAlert('error', 'Cette facture est déjà intégralement annulée ou couverte par des avoirs (Solde disponible : 0 FCFA).');
+                    $('#avoirCreateForm button[type=submit], button[form=avoirCreateForm]').prop('disabled', true);
+                } else {
+                    $('#avoirCreateForm button[type=submit], button[form=avoirCreateForm]').prop('disabled', false);
+                }
+
                 $('input[name=reference]').val(data.reference || ('Facture ' + data.code));
                 $('input[name=remise_1]').val(data.remise_1 || 0);
                 $('input[name=remise_2]').val(data.remise_2 || 0);
@@ -748,6 +796,8 @@
                 activeFactureTotal = 0;
                 activeFacturePaye = 0;
                 activeFactureReste = 0;
+                $('#havingRanAlert').remove();
+                $('#nature_avoir option[value="RAN"]').prop('disabled', false);
                 $('#avoirOrigineDetailsCard').slideUp();
                 evaluateMainAvoirTreasury();
             }
@@ -967,6 +1017,41 @@
                     }
                 });
             });
+
+            // Initialisation de DataTable sur la liste des factures d'avoir
+            let avoirsDataTable = null;
+            if ($.fn.DataTable && $('#avoirsTable').length) {
+                avoirsDataTable = $('#avoirsTable').DataTable({
+                    order: [[5, 'desc']], // Tri par date décroissante par défaut
+                    pageLength: 25,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]],
+                    columnDefs: [
+                        { targets: [6], orderable: false, searchable: false }
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche :",
+                        lengthMenu: "Afficher _MENU_ avoirs",
+                        info: "Affichage de _START_ à _END_ sur _TOTAL_ avoirs",
+                        infoEmpty: "Affichage de 0 à 0 sur 0 avoir",
+                        infoFiltered: "(filtré sur _MAX_ avoirs)",
+                        zeroRecords: "Aucun avoir trouvé",
+                        paginate: { first: "Premier", previous: "Précédent", next: "Suivant", last: "Dernier" }
+                    }
+                });
+            }
+
+            window.searchTable = function() {
+                const val = document.getElementById("searchInput").value;
+                if (avoirsDataTable) {
+                    avoirsDataTable.search(val).draw();
+                } else {
+                    const filter = val.toUpperCase();
+                    $('#avoirsTable tbody tr').each(function() {
+                        $(this).toggle($(this).text().toUpperCase().indexOf(filter) > -1);
+                    });
+                }
+            };
 
             @if ($errors->any() || session('form_error'))
                 new bootstrap.Modal(document.getElementById('createAvoirModal')).show();

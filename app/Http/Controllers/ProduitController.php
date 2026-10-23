@@ -27,7 +27,7 @@ class ProduitController extends Controller
             $query->where('tva_id', $request->tva_id);
         }
 
-        $collection = $query->paginate(10)->withQueryString();
+        $collection = $query->paginate(50)->withQueryString();
         $tvas = Tva::all();
 
         return view('pages.produits.index', compact('collection', 'tvas'));

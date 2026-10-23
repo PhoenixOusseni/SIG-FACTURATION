@@ -61,12 +61,26 @@ class StoreFactureAvoirRequest extends StoreFactureRequest
                 'exists:factures,id',
                 function ($attribute, $value, $fail) {
                     $facture = Facture::find($value);
-                    if ($facture && $facture->aAvoirTotal()) {
-                        $fail("La facture {$facture->code} a déjà fait l'objet d'une annulation totale ou d'avoirs couvrant son montant intégral.");
+                    if (!$facture) {
+                        return;
+                    }
+                    if ($facture->aAvoirTotal() || $facture->soldeAvoirDisponible() <= 0.009) {
+                        $fail("La facture {$facture->code} a déjà fait l'objet d'une annulation totale ou son solde d'avoir disponible est épuisé.");
                     }
                 },
             ],
-            'nature_avoir' => 'required|in:COR,RAN,RAM,RRR',
+            'nature_avoir' => [
+                'required',
+                'in:COR,RAN,RAM,RRR',
+                function ($attribute, $value, $fail) {
+                    $nature = strtoupper((string) $value);
+                    $factureId = $this->input('facture_id');
+                    $facture = Facture::find($factureId);
+                    if ($facture && $nature === 'RAN' && $facture->aSubiAvoir()) {
+                        $fail("La facture {$facture->code} a déjà fait l'objet d'un avoir partiel. L'annulation totale (RAN) est interdite. Veuillez choisir un retour de marchandises (RAM) ou une remise (RRR).");
+                    }
+                },
+            ],
             'motif' => 'nullable|string|max:255',
             'date' => 'required|date',
             'reference' => 'nullable|string|max:100',
@@ -82,6 +96,34 @@ class StoreFactureAvoirRequest extends StoreFactureRequest
             'remboursement_montant' => 'nullable|numeric|min:0',
             'remboursement_ref' => 'nullable|string|max:150',
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $facture = Facture::with('ElementFactures')->find($this->input('facture_id'));
+            if (!$facture) {
+                return;
+            }
+
+            $produits = (array) $this->input('produits_id', []);
+            $quantites = (array) $this->input('quantite', []);
+
+            foreach ($produits as $idx => $pid) {
+                $pid = (int) $pid;
+                $qteSaisie = (float) ($quantites[$idx] ?? 0);
+                $elOrig = $facture->ElementFactures->where('produits_id', $pid)->first();
+                if (!$elOrig) {
+                    $validator->errors()->add("produits_id.{$idx}", "Le produit sélectionné n'appartient pas à la facture d'origine.");
+                    continue;
+                }
+                $qteRestante = $facture->quantiteRestanteProduit($pid, (float) $elOrig->quantite);
+                if ($qteSaisie > ($qteRestante + 0.009)) {
+                    $nomProd = $elOrig->designation ?: "Produit #{$pid}";
+                    $validator->errors()->add("quantite.{$idx}", "La quantité demandée ({$qteSaisie}) pour '{$nomProd}' dépasse la quantité disponible restante ({$qteRestante}).");
+                }
+            }
+        });
     }
 
     public function messages(): array

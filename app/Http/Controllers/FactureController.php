@@ -375,6 +375,10 @@ class FactureController extends Controller
         $tauxBic = (float) optional($facture->Bic)->taux;
         $remise1 = (float) ($facture->remise_1 ?? 0);
         $remise2 = (float) ($facture->remise_2 ?? 0);
+        $aSubiAvoir = $facture->aSubiAvoir();
+        $aAvoirTotal = $facture->aAvoirTotal();
+        $canRan = !$aSubiAvoir;
+        $soldeAvoirDispo = (float) $facture->soldeAvoirDisponible();
 
         return response()->json([
             'id' => $facture->id,
@@ -391,11 +395,18 @@ class FactureController extends Controller
             'montant_paye' => (float) $facture->montant_paye,
             'reste_a_payer' => (float) $facture->reste_a_payer,
             'trop_percu' => (float) $facture->trop_percu,
-            'solde_avoir_disponible' => (float) $facture->soldeAvoirDisponible(),
-            'a_avoir_total' => (bool) $facture->aAvoirTotal(),
-            'lignes' => $facture->ElementFactures->map(function ($el) use ($tauxBic) {
+            'solde_avoir_disponible' => $soldeAvoirDispo,
+            'a_subi_avoir' => $aSubiAvoir,
+            'a_deja_avoir_partiel' => ($aSubiAvoir && !$aAvoirTotal),
+            'can_ran' => $canRan,
+            'a_avoir_total' => $aAvoirTotal,
+            'lignes' => $facture->ElementFactures->map(function ($el) use ($facture, $tauxBic) {
                 $prod = $el->Produit;
-                $qte = (float) $el->quantite;
+                $qteInitiale = (float) $el->quantite;
+                $qteDejaAvoir = $facture->quantiteAvoirProduit((int) $el->produits_id);
+                $qteRestante = max(0.0, round($qteInitiale - $qteDejaAvoir, 2));
+
+                $qte = $qteRestante;
                 $pu = (float) $el->prix_unitaire;
                 $montantHt = $qte * $pu;
 
@@ -424,7 +435,10 @@ class FactureController extends Controller
                     'id' => $el->id,
                     'produit_id' => $el->produits_id,
                     'designation' => $el->designation ?: optional($prod)->designation,
-                    'quantite' => $qte,
+                    'quantite_initiale' => $qteInitiale,
+                    'quantite_deja_avoir' => $qteDejaAvoir,
+                    'quantite_restante' => $qteRestante,
+                    'quantite' => $qteRestante,
                     'prix_unitaire' => $pu,
                     'montant_ht' => $montantHt,
                     'type_ts' => $typeTs,

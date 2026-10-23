@@ -82,7 +82,7 @@
                     </div>
 
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle">
+                        <table class="table table-hover align-middle mb-0" id="produitsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Code</th>
@@ -103,11 +103,7 @@
                                         <td class="fw-bold font-monospace text-primary">{{ $item->code }}</td>
                                         <td class="fw-bold">{{ $item->designation }}</td>
                                         <td>{{ $item->unite ?: 'U' }}</td>
-                                        <td class="text-center">
-                                            @php
-                                                $isService = in_array($item->famille_produit, ['LOCSER', 'IMPSER']);
-                                                $qte = (float) ($item->qte ?? 0);
-                                            @endphp
+                                        <td class="text-center" data-order="{{ $isService ? -1 : $qte }}">
                                             @if ($isService)
                                                 <span class="badge bg-secondary text-white" title="Prestation de service : pas d'inventaire physique">
                                                     <i class="fas fa-concierge-bell me-1"></i> Prestation (N/A)
@@ -120,8 +116,8 @@
                                                 <span class="badge bg-success">{{ number_format($qte, 2, ',', ' ') }}</span>
                                             @endif
                                         </td>
-                                        <td class="text-end font-monospace fw-bold">{{ number_format($item->prix_unitaire ?? 0, 0, ',', ' ') }}</td>
-                                        <td class="text-end font-monospace fw-bold text-primary">{{ number_format($item->prix_unitaire_ttc ?? 0, 0, ',', ' ') }}</td>
+                                        <td class="text-end font-monospace fw-bold" data-order="{{ (float)($item->prix_unitaire ?? 0) }}">{{ number_format($item->prix_unitaire ?? 0, 0, ',', ' ') }}</td>
+                                        <td class="text-end font-monospace fw-bold text-primary" data-order="{{ (float)($item->prix_unitaire_ttc ?? 0) }}">{{ number_format($item->prix_unitaire_ttc ?? 0, 0, ',', ' ') }}</td>
                                         <td class="text-center">
                                             @if ($item->tva)
                                                 <span class="badge bg-primary">Groupe {{ $item->tva->code }} ({{ $item->tva->taux }}%)</span>
@@ -490,7 +486,42 @@
             }
         }
 
+        let produitsDataTable = null;
+        function initProduitsDataTable() {
+            if ($.fn.DataTable && $('#produitsTable').length && !$.fn.DataTable.isDataTable('#produitsTable')) {
+                produitsDataTable = $('#produitsTable').DataTable({
+                    order: [[1, 'asc']], // Tri par Désignation
+                    paging: false, // pagination gérée côté Laravel
+                    info: false,
+                    columnDefs: [
+                        { targets: [9], orderable: false, searchable: false },
+                        { targets: [3, 4, 5], type: 'num' }
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche :",
+                        zeroRecords: "Aucun article trouvé",
+                        emptyTable: "Aucun article disponible"
+                    }
+                });
+            }
+        }
+
+        window.searchTable = function() {
+            var val = document.getElementById("searchInput").value;
+            if (produitsDataTable) {
+                produitsDataTable.search(val).draw();
+            } else {
+                var filter = val.toUpperCase();
+                $('#produitsTable tbody tr').each(function() {
+                    $(this).toggle($(this).text().toUpperCase().indexOf(filter) > -1);
+                });
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
+            initProduitsDataTable();
+
             // Écouteurs sur les sélecteurs TS
             document.querySelectorAll('.ts-type-select').forEach(function(sel) {
                 sel.addEventListener('change', function() {

@@ -35,7 +35,7 @@
                     </div>
                     @if ($collection->count() > 0)
                         <div class="table-responsive">
-                            <table class="table table-hover align-middle w-100 mb-0">
+                            <table class="table table-hover align-middle w-100 mb-0" id="clientsTable">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Code</th>
@@ -443,22 +443,48 @@
             }
         }
 
+        let clientsDataTable = null;
+        function initClientsDataTable() {
+            if ($.fn.DataTable && $('#clientsTable').length && !$.fn.DataTable.isDataTable('#clientsTable')) {
+                clientsDataTable = $('#clientsTable').DataTable({
+                    order: [[1, 'asc']], // Tri par Nom / Raison Sociale
+                    pageLength: 25,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]],
+                    columnDefs: [
+                        { targets: [6], orderable: false, searchable: false }
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche :",
+                        lengthMenu: "Afficher _MENU_ clients",
+                        info: "Affichage de _START_ à _END_ sur _TOTAL_ clients",
+                        infoEmpty: "Affichage de 0 à 0 sur 0 client",
+                        infoFiltered: "(filtré sur _MAX_ clients)",
+                        zeroRecords: "Aucun client trouvé",
+                        paginate: { first: "Premier", previous: "Précédent", next: "Suivant", last: "Dernier" }
+                    }
+                });
+            }
+        }
+
         function searchTable() {
-            var input = document.getElementById("searchInput");
-            var filter = input.value.toUpperCase();
-            var table = document.querySelector("table tbody");
-            var tr = table.getElementsByTagName("tr");
-            for (var i = 0; i < tr.length; i++) {
-                var text = tr[i].textContent || tr[i].innerText;
-                if (text.toUpperCase().indexOf(filter) > -1) {
-                    tr[i].style.display = "";
-                } else {
-                    tr[i].style.display = "none";
+            var input = document.getElementById("searchInput").value;
+            if (clientsDataTable) {
+                clientsDataTable.search(input).draw();
+            } else {
+                var filter = input.toUpperCase();
+                var table = document.querySelector("#clientsTable tbody");
+                if (!table) return;
+                var tr = table.getElementsByTagName("tr");
+                for (var i = 0; i < tr.length; i++) {
+                    var text = tr[i].textContent || tr[i].innerText;
+                    tr[i].style.display = (text.toUpperCase().indexOf(filter) > -1) ? "" : "none";
                 }
             }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            initClientsDataTable();
             const select = document.getElementById('client_type_select');
             if (select) {
                 select.addEventListener('change', updateClientFormRules);

@@ -142,6 +142,9 @@ class Facture extends Model
 
         $totalAvoir = 0.0;
         foreach ($avoirs as $av) {
+            if ($av->statut === 'brouillon') {
+                continue;
+            }
             $totalAvoir += (float) $av->montant_total;
         }
 
@@ -157,6 +160,54 @@ class Facture extends Model
             return false;
         }
         return $this->soldeAvoirDisponible() > 0.009;
+    }
+
+    /**
+     * Détermine si la facture a déjà fait l'objet d'un avoir partiel.
+     */
+    public function aDejaAvoirPartiel(): bool
+    {
+        return $this->aSubiAvoir() && !$this->aAvoirTotal();
+    }
+
+    /**
+     * L'annulation totale RAN est interdite dès que la facture a déjà subi au moins un avoir antérieur.
+     */
+    public function canRan(): bool
+    {
+        return !$this->aSubiAvoir();
+    }
+
+    /**
+     * Calcule le total des quantités d'un produit déjà créditées/retournées par des avoirs sur cette facture.
+     */
+    public function quantiteAvoirProduit(int $produitId): float
+    {
+        $avoirs = $this->relationLoaded('FactureAvoirs')
+            ? $this->getRelation('FactureAvoirs')
+            : $this->FactureAvoirs()->with('ElementFactureAvoirs')->get();
+
+        $qte = 0.0;
+        foreach ($avoirs as $av) {
+            if ($av->statut === 'brouillon') {
+                continue;
+            }
+            foreach ($av->ElementFactureAvoirs as $elAv) {
+                if ((int) $elAv->produits_id === $produitId) {
+                    $qte += (float) $elAv->quantite;
+                }
+            }
+        }
+        return round($qte, 2);
+    }
+
+    /**
+     * Calcule la quantité résiduelle nette disponible pour un produit donné sur cette facture.
+     */
+    public function quantiteRestanteProduit(int $produitId, float $quantiteInitiale): float
+    {
+        $dejaAvoir = $this->quantiteAvoirProduit($produitId);
+        return max(0.0, round($quantiteInitiale - $dejaAvoir, 2));
     }
 
     public function McfCertifications()

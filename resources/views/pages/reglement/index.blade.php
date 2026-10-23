@@ -95,8 +95,8 @@
 
                     @if ($collection->count() > 0)
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
+                            <table class="table table-hover align-middle mb-0" id="reglementsTable">
+                                <thead class="table-light">
                                     <tr>
                                         <th>Code</th>
                                         <th>Date</th>
@@ -112,7 +112,7 @@
                                     @foreach ($collection as $r)
                                         <tr>
                                             <td><strong style="color:var(--primary-color);">{{ $r->code }}</strong></td>
-                                            <td>{{ \Carbon\Carbon::parse($r->date)->format('d/m/Y') }}</td>
+                                            <td data-order="{{ \Carbon\Carbon::parse($r->date)->format('Y-m-d') }}">{{ \Carbon\Carbon::parse($r->date)->format('d/m/Y') }}</td>
                                             <td>
                                                 <a href="{{ route('module_ordre_facture.show', $r->facture_id) }}">
                                                     {{ optional($r->Facture)->code ?? 'N/A' }}
@@ -120,7 +120,7 @@
                                             </td>
                                             <td>{{ optional(optional($r->Facture)->Contribuable)->assujeti ?? '—' }}</td>
                                             <td><span class="badge-mode" style="background:#e0e7ff;color:#3730a3;">{{ $r->mode }}</span></td>
-                                            <td class="text-end"><strong>{{ number_format($r->montant, 0, ',', ' ') }} FCFA</strong></td>
+                                            <td class="text-end font-monospace fw-bold text-success" data-order="{{ (float) $r->montant }}">{{ number_format($r->montant, 0, ',', ' ') }} FCFA</td>
                                             <td>{{ $r->reference_paiement ?? '—' }}</td>
                                             <td class="text-center">
                                                 <a href="{{ route('module_reglement.show', $r->id) }}" class="btn btn-sm btn-success">
@@ -304,6 +304,42 @@
             $('[id^="editReglementModal"]').on('shown.bs.modal', function () {
                 initSelect2(this);
             });
+
+            // Initialisation de DataTable sur les règlements
+            let reglementsDataTable = null;
+            if ($.fn.DataTable && $('#reglementsTable').length) {
+                reglementsDataTable = $('#reglementsTable').DataTable({
+                    order: [[1, 'desc']], // Date la plus récente
+                    pageLength: 25,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]],
+                    columnDefs: [
+                        { targets: [7], orderable: false, searchable: false },
+                        { targets: [5], type: 'num' }
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche :",
+                        lengthMenu: "Afficher _MENU_ règlements",
+                        info: "Affichage de _START_ à _END_ sur _TOTAL_ règlements",
+                        infoEmpty: "Affichage de 0 à 0 sur 0 règlement",
+                        infoFiltered: "(filtré sur _MAX_ règlements)",
+                        zeroRecords: "Aucun règlement trouvé",
+                        paginate: { first: "Premier", previous: "Précédent", next: "Suivant", last: "Dernier" }
+                    }
+                });
+            }
+
+            window.searchTable = function() {
+                var val = document.getElementById("searchInput").value;
+                if (reglementsDataTable) {
+                    reglementsDataTable.search(val).draw();
+                } else {
+                    var filter = val.toUpperCase();
+                    $('#reglementsTable tbody tr').each(function() {
+                        $(this).toggle($(this).text().toUpperCase().indexOf(filter) > -1);
+                    });
+                }
+            };
 
             // Auto-remplir les infos quand on change de facture
             $('#factureSelect').on('change', function () {

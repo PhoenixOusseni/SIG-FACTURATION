@@ -341,7 +341,7 @@
                                                 <a href="javascript:void(0)" onclick="openPreview({{ $facture->id }}, '{{ $facture->code }}', {{ $isCertifiee ? 'true' : 'false' }}, 'facture')" class="fw-bold font-monospace text-primary fs-6 text-decoration-none" title="Prévisualiser la facture">{{ $facture->code }}</a>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-order="{{ optional($facture->date)->format('Y-m-d') }}">
                                             <div>{{ optional($facture->date)->format('d/m/Y') }}</div>
                                             @if ($facture->reference)
                                                  <small class="text-muted font-monospace">{{ $facture->reference }}</small>
@@ -353,7 +353,7 @@
                                                 <small class="text-muted font-monospace">IFU: {{ $facture->Contribuable->ifu }}</small>
                                             @endif
                                         </td>
-                                        <td class="text-end font-monospace fw-bold fs-6">
+                                        <td class="text-end font-monospace fw-bold fs-6" data-order="{{ $totTtc }}">
                                             {{ number_format($totTtc, 0, ',', ' ') }} F
                                         </td>
                                         <td class="text-center">
@@ -429,7 +429,7 @@
                                                     @if ($peutAvoir)
                                                         <button type="button" class="btn btn-outline-warning text-dark"
                                                             title="Émettre un Avoir fiscal DGI sur cette facture (Solde éligible : {{ number_format($soldeAvoirDispo, 0, ',', ' ') }} FCFA)"
-                                                            onclick="openAvoirModal({{ $facture->id }}, '{{ $facture->code }}', {{ $facture->contribuable_id ?? 'null' }}, '{{ addslashes(optional($facture->Contribuable)->assujeti ?? '') }}', {{ $soldeAvoirDispo }}, {{ $paye }}, {{ $reste }})">
+                                                            onclick="openAvoirModal({{ $facture->id }}, '{{ $facture->code }}', {{ $facture->contribuable_id ?? 'null' }}, '{{ addslashes(optional($facture->Contribuable)->assujeti ?? '') }}', {{ $totTtc }}, {{ $soldeAvoirDispo }}, {{ $paye }}, {{ $reste }})">
                                                             <i class="fas fa-undo"></i>
                                                         </button>
                                                     @endif
@@ -497,7 +497,7 @@
                                                 <span class="fw-bold font-monospace text-warning-emphasis fs-6">{{ $avoir->code }}</span>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-order="{{ $avoir->date ? \Carbon\Carbon::parse($avoir->date)->format('Y-m-d') : '1970-01-01' }}">
                                             <div>{{ $avoir->date ? \Carbon\Carbon::parse($avoir->date)->format('d/m/Y') : 'N/A' }}</div>
                                             <small class="text-muted font-monospace">Sur : {{ optional($avoir->Facture)->code ?: 'Facture orig.' }}</small>
                                             <span class="badge bg-light text-secondary border px-1" style="font-size: 10px;">{{ $natureLabel }}</span>
@@ -505,7 +505,7 @@
                                         <td>
                                             <div class="fw-semibold text-dark">{{ optional($avoir->Contribuable)->assujeti ?? optional(optional($avoir->Facture)->Contribuable)->assujeti ?? 'Client' }}</div>
                                         </td>
-                                        <td class="text-end font-monospace fw-bold fs-6 text-danger">
+                                        <td class="text-end font-monospace fw-bold fs-6 text-danger" data-order="-{{ $totAvoir }}">
                                             - {{ number_format($totAvoir, 0, ',', ' ') }} F
                                         </td>
                                         <td class="text-center">
@@ -563,7 +563,7 @@
                                                 <span class="fw-bold font-monospace text-info-emphasis fs-6">{{ $proforma->code }}</span>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-order="{{ $proforma->date ? \Carbon\Carbon::parse($proforma->date)->format('Y-m-d') : '1970-01-01' }}">
                                             <div>{{ $proforma->date ? \Carbon\Carbon::parse($proforma->date)->format('d/m/Y') : 'N/A' }}</div>
                                             @if ($proforma->reference)
                                                 <small class="text-muted font-monospace">{{ $proforma->reference }}</small>
@@ -572,7 +572,7 @@
                                         <td>
                                             <div class="fw-semibold text-dark">{{ optional($proforma->Contribuable)->assujeti ?? 'Client' }}</div>
                                         </td>
-                                        <td class="text-end font-monospace fw-bold fs-6">
+                                        <td class="text-end font-monospace fw-bold fs-6" data-order="{{ $totProforma }}">
                                             {{ number_format($totProforma, 0, ',', ' ') }} F
                                         </td>
                                         <td class="text-center">
@@ -1289,6 +1289,10 @@
                                 <input type="date" name="date" class="form-control" value="{{ date('Y-m-d') }}" required>
                             </div>
                             <div class="col-12">
+                                <div class="alert alert-warning py-2 px-3 small mb-2 d-flex align-items-center" id="avoir_ran_blocked_alert" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle me-2 text-warning fs-5"></i>
+                                    <div><strong>Annulation Totale (RAN) verrouillée :</strong> Cette facture a déjà fait l'objet d'un avoir partiel. L'annulation intégrale à 100% n'est plus autorisée. Veuillez utiliser un Retour (RAM), une Remise (RRR) ou une Correction (COR) sur les articles restants.</div>
+                                </div>
                                 <div class="alert alert-info py-2 px-3 small mb-0 d-flex align-items-center" id="avoir_nature_notice">
                                     <i class="fas fa-ban me-2 text-danger fs-5"></i>
                                     <div><strong>Annulation Totale (RAN) :</strong> Toutes les quantités sont verrouillées à 100% de la facture d'origine. Les biens seront réintégrés au stock.</div>
@@ -1349,8 +1353,8 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Article / Prestation</th>
-                                                <th class="text-center" style="width: 110px;">Qté Facturée</th>
-                                                <th class="text-center" style="width: 130px;">Qté en Avoir</th>
+                                                <th class="text-center" style="width: 100px;">Qté Init.</th>
+                                                <th class="text-center" style="width: 140px;">Qté en Avoir</th>
                                                 <th class="text-end" style="width: 140px;">P.U. HT</th>
                                                 <th class="text-end" style="width: 170px;">Total Ligne TTC</th>
                                             </tr>
@@ -1429,10 +1433,14 @@
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer bg-white border-top d-flex justify-content-between">
+                    <div class="modal-footer bg-white border-top d-flex justify-content-between align-items-center">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                        <div>
-                            <button type="submit" name="action_type" value="certifier" class="btn btn-warning fw-bold text-dark px-4 shadow-sm">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="alert alert-danger py-1 px-2 small mb-0 d-flex align-items-center" id="avoir_solde_depasse_alert" style="display: none;">
+                                <i class="fas fa-exclamation-triangle me-1 text-danger"></i>
+                                <span id="avoir_solde_depasse_text">Dépassement du solde éligible.</span>
+                            </div>
+                            <button type="submit" id="btnSubmitQuickAvoir" name="action_type" value="certifier" class="btn btn-warning fw-bold text-dark px-4 shadow-sm">
                                 <i class="fas fa-check-circle me-1"></i> Valider l'Avoir
                             </button>
                         </div>
@@ -1652,43 +1660,88 @@
         let currentPreviewType = 'facture';
         let currentPreviewFormat = 'a4';
 
+        let hubBillingDataTable = null;
+        let currentTabFilter = 'tous';
+
+        function initHubBillingDataTable() {
+            if ($.fn.DataTable && $('#hubBillingTable').length && !$.fn.DataTable.isDataTable('#hubBillingTable')) {
+                // Enregistrement du filtre personnalisé par onglets
+                $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                    if (settings.nTable.id !== 'hubBillingTable') return true;
+                    if (currentTabFilter === 'tous') return true;
+                    const node = hubBillingDataTable ? hubBillingDataTable.row(dataIndex).node() : null;
+                    if (!node) return true;
+                    const rowType = $(node).attr('data-type');
+                    const rowStatus = $(node).attr('data-status');
+                    if (currentTabFilter === 'ERREUR') return rowStatus === 'ERREUR';
+                    if (currentTabFilter === 'IMPAYE') return rowStatus === 'IMPAYE';
+                    return rowType === currentTabFilter;
+                });
+
+                hubBillingDataTable = $('#hubBillingTable').DataTable({
+                    order: [[1, 'desc']], // Tri par défaut : Date la plus récente
+                    pageLength: 25,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]],
+                    columnDefs: [
+                        { targets: [6], orderable: false, searchable: false }, // Colonne Actions non triable
+                        { targets: [3], type: 'num' } // Colonne Total triée numériquement
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche :",
+                        lengthMenu: "Afficher _MENU_ pièces",
+                        info: "Affichage de _START_ à _END_ sur _TOTAL_ pièces",
+                        infoEmpty: "Affichage de 0 à 0 sur 0 pièce",
+                        infoFiltered: "(filtré sur _MAX_ pièces)",
+                        loadingRecords: "Chargement...",
+                        zeroRecords: "Aucune pièce trouvée",
+                        emptyTable: "Aucune pièce disponible",
+                        paginate: {
+                            first: "Premier",
+                            previous: "Précédent",
+                            next: "Suivant",
+                            last: "Dernier"
+                        }
+                    },
+                    dom: "<'row p-3 align-items-center'<'col-sm-6'l><'col-sm-6 text-end'<'d-none'f>>>" +
+                         "<'row'<'col-sm-12'tr>>" +
+                         "<'row p-3 align-items-center border-top'<'col-sm-6 text-muted small'i><'col-sm-6'p>>"
+                });
+            }
+        }
+
         // 1. Filtrer le tableau sans recharger la page
         function filtrerTableau(type) {
             $('.hub-tab-btn').removeClass('active');
-            if (event && event.target) {
-                $(event.target).closest('.hub-tab-btn').addClass('active');
+            if (window.event && window.event.target) {
+                $(window.event.target).closest('.hub-tab-btn').addClass('active');
             }
-
-            $('.hub-row').each(function() {
-                const rowType = $(this).attr('data-type');
-                const rowStatus = $(this).attr('data-status');
-
-                if (type === 'tous') {
-                    $(this).show();
-                } else if (type === 'ERREUR') {
-                    if (rowStatus === 'ERREUR') $(this).show();
-                    else $(this).hide();
-                } else if (type === 'IMPAYE') {
-                    if (rowStatus === 'IMPAYE') $(this).show();
-                    else $(this).hide();
-                } else {
-                    if (rowType === type) $(this).show();
-                    else $(this).hide();
-                }
-            });
+            currentTabFilter = type;
+            if (hubBillingDataTable) {
+                hubBillingDataTable.draw();
+            } else {
+                $('.hub-row').each(function() {
+                    const rowType = $(this).attr('data-type');
+                    const rowStatus = $(this).attr('data-status');
+                    if (type === 'tous') $(this).show();
+                    else if (type === 'ERREUR') $(this).toggle(rowStatus === 'ERREUR');
+                    else if (type === 'IMPAYE') $(this).toggle(rowStatus === 'IMPAYE');
+                    else $(this).toggle(rowType === type);
+                });
+            }
         }
 
         // 2. Recherche en temps réel dans le tableau
         function rechercherDansTableau() {
-            const input = document.getElementById('hubSearchInput').value.toLowerCase();
-            $('.hub-row').each(function() {
-                const text = $(this).text().toLowerCase();
-                if (text.indexOf(input) > -1) {
-                    $(this).show();
-                } else {
-                    $(this).hide();
-                }
-            });
+            const val = document.getElementById('hubSearchInput').value;
+            if (hubBillingDataTable) {
+                hubBillingDataTable.search(val).draw();
+            } else {
+                const filter = val.toLowerCase();
+                $('.hub-row').each(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(filter) > -1);
+                });
+            }
         }
 
         // 3. Ouvrir la modale de prévisualisation haute-fidélité DGI
@@ -1766,10 +1819,12 @@
         let quickAvoirFacturePaye = 0;
         let quickAvoirFactureReste = 0;
         let quickAvoirFactureTotal = 0;
+        let quickAvoirSoldeDispo = 0;
         let currentInvoiceData = null;
 
-        function openAvoirModal(factureId, code, clientId, clientName, totalTtc, montantPaye, resteAPayer) {
+        function openAvoirModal(factureId, code, clientId, clientName, totalTtc, soldeAvoirDispo, montantPaye, resteAPayer) {
             quickAvoirFactureTotal = parseFloat(totalTtc) || 0;
+            quickAvoirSoldeDispo = parseFloat(soldeAvoirDispo) || 0;
             quickAvoirFacturePaye = parseFloat(montantPaye) || 0;
             quickAvoirFactureReste = parseFloat(resteAPayer) || 0;
 
@@ -1782,15 +1837,18 @@
             $('#avoir_origin_total').text(Number(totalTtc).toLocaleString('fr-FR') + ' F');
             $('#avoir_origin_paye').text(Number(quickAvoirFacturePaye).toLocaleString('fr-FR') + ' F');
             $('#avoir_origin_reste').text(Number(quickAvoirFactureReste).toLocaleString('fr-FR') + ' F');
-            $('#avoir_origin_solde').text(Number(totalTtc).toLocaleString('fr-FR') + ' F');
+            $('#avoir_origin_solde').text(Number(quickAvoirSoldeDispo).toLocaleString('fr-FR') + ' F');
 
             $('#quick_effectuer_remboursement').prop('checked', false);
             $('#quickAvoirRefundFields').hide();
 
+            $('#avoir_ran_blocked_alert').hide();
+            $('#avoir_solde_depasse_alert').hide();
+            $('#btnSubmitQuickAvoir').prop('disabled', false);
+
             $('#avoir_nature').val('RAN');
             $('#quick_rrr_val').val('');
             $('#quickAvoirRrrControls').hide();
-            onAvoirNatureChange();
 
             $('#avoirItemsContainer').html(`
                 <tr>
@@ -1821,27 +1879,36 @@
             let html = '';
             if (currentInvoiceData && currentInvoiceData.lignes && currentInvoiceData.lignes.length > 0) {
                 currentInvoiceData.lignes.forEach((el, idx) => {
-                    const maxQte = el.quantite;
+                    const qteInit = el.quantite_initiale !== undefined ? el.quantite_initiale : el.quantite;
+                    const qteDeja = el.quantite_deja_avoir || 0;
+                    const qteRest = el.quantite_restante !== undefined ? el.quantite_restante : el.quantite;
                     const pu = el.prix_unitaire;
                     const tot = (el.ttc_total !== undefined) ? el.ttc_total : (el.montant_ht + (el.tva_total || 0) + (el.ts_total || 0));
                     const tvaInfo = el.taux_tva > 0 ? `TVA ${el.taux_tva}%` : `Exonéré (Gr. ${el.groupe_tva})`;
                     const tsInfo = el.ts_total > 0 ? ` · TS: ${Number(el.ts_total).toLocaleString('fr-FR')} F` : '';
 
                     html += `
-                        <tr class="avoir-item-row" data-idx="${idx}">
+                        <tr class="avoir-item-row" data-idx="${idx}" data-rest="${qteRest}">
                             <td>
                                 <input type="hidden" name="produits_id[]" value="${el.produit_id || ''}">
                                 <div class="fw-bold text-dark">${el.designation}</div>
                                 <small class="text-muted" style="font-size: 11px;">
                                     ${tvaInfo}${tsInfo}
-                                    ${el.is_service ? ' · (Prestation de service)' : ''}
+                                    ${el.is_service ? ' · (Prestation)' : ''}
+                                    ${qteDeja > 0 ? ` · <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Déjà retourné: ${qteDeja}</span>` : ''}
                                 </small>
                             </td>
-                            <td class="text-center font-monospace">${maxQte}</td>
+                            <td class="text-center font-monospace">${qteInit}</td>
                             <td class="text-center">
-                                <input type="number" step="0.01" min="0" max="${maxQte}" name="quantite[]"
-                                    class="form-control form-control-sm font-monospace avoir-qte-input text-center fw-bold"
-                                    value="${maxQte}" oninput="recalcAvoirRow(this)">
+                                ${qteRest <= 0 ? `
+                                    <span class="badge bg-secondary">Épuisé (0)</span>
+                                    <input type="hidden" name="quantite[]" class="avoir-qte-input" value="0" max="0">
+                                ` : `
+                                    <input type="number" step="0.01" min="0" max="${qteRest}" name="quantite[]"
+                                        class="form-control form-control-sm font-monospace avoir-qte-input text-center fw-bold"
+                                        value="${qteRest}" oninput="recalcAvoirRow(this)">
+                                    <small class="text-muted d-block" style="font-size: 10px;">Max restant: ${qteRest}</small>
+                                `}
                             </td>
                             <td class="text-end font-monospace">
                                 <input type="hidden" name="prix_unitaire[]" value="${pu}" class="avoir-pu-input">
@@ -1860,7 +1927,21 @@
         }
 
         function onAvoirNatureChange() {
-            const nature = $('#avoir_nature').val();
+            let nature = $('#avoir_nature').val();
+
+            // Règle critique anti-fraude & cohérence : si la facture a déjà subi un avoir partiel, interdire RAN
+            if (currentInvoiceData && currentInvoiceData.can_ran === false) {
+                $('#avoir_nature option[value="RAN"]').prop('disabled', true);
+                $('#avoir_ran_blocked_alert').show();
+                if (nature === 'RAN') {
+                    $('#avoir_nature').val('RAM');
+                    nature = 'RAM';
+                }
+            } else {
+                $('#avoir_nature option[value="RAN"]').prop('disabled', false);
+                $('#avoir_ran_blocked_alert').hide();
+            }
+
             const motifMap = {
                 'RAN': 'annulation',
                 'COR': 'erreur',
@@ -1871,9 +1952,9 @@
 
             const notices = {
                 'RAN': '<i class="fas fa-ban me-2 text-danger fs-5"></i><div><strong>Annulation Totale (RAN) :</strong> Toutes les quantités sont verrouillées à 100% de la facture d\'origine. Les articles physiques seront intégralement réintégrés au stock.</div>',
-                'RAM': '<i class="fas fa-box-open me-2 text-warning fs-5"></i><div><strong>Retour de Marchandises (RAM) :</strong> Ajustez les quantités d\'articles physiques retournés. Les articles sélectionnés seront réintégrés au stock.</div>',
+                'RAM': '<i class="fas fa-box-open me-2 text-warning fs-5"></i><div><strong>Retour de Marchandises (RAM) :</strong> Ajustez les quantités d\'articles physiques retournés dans la limite du stock restant. Les articles sélectionnés seront réintégrés au stock.</div>',
                 'RRR': '<i class="fas fa-percent me-2 text-info fs-5"></i><div><strong>Avoir Financier (RRR) :</strong> Rabais ou Remise accordé après facturation. Aucun mouvement de stock physique, PSVB = 0, TS fixes exclues.</div>',
-                'COR': '<i class="fas fa-tools me-2 text-primary fs-5"></i><div><strong>Correction d\'Erreur (COR) :</strong> Rectification matérielle des lignes de la facture certifiée.</div>'
+                'COR': '<i class="fas fa-tools me-2 text-primary fs-5"></i><div><strong>Correction d\'Erreur (COR) :</strong> Rectification matérielle des lignes de la facture certifiée sur le reliquat restant.</div>'
             };
             $('#avoir_nature_notice').html(notices[nature] || notices['RAN']);
 
@@ -1932,7 +2013,11 @@
             }
 
             let pct = 0;
-            const totalOrigHt = currentInvoiceData.lignes.reduce((acc, l) => acc + (l.quantite * l.prix_unitaire), 0);
+            // Base HT résiduelle sur les quantités encore disponibles
+            const totalOrigHt = currentInvoiceData.lignes.reduce((acc, l) => {
+                const qRest = l.quantite_restante !== undefined ? l.quantite_restante : l.quantite;
+                return acc + (qRest * l.prix_unitaire);
+            }, 0);
 
             if (unit === 'pourcentage') {
                 pct = Math.min(100, val);
@@ -1945,10 +2030,11 @@
                 const origLigne = currentInvoiceData.lignes[idx];
                 const origPu = origLigne.prix_unitaire;
                 const rabaisPu = Math.round((origPu * (pct / 100)) * 100) / 100;
+                const qRest = origLigne.quantite_restante !== undefined ? origLigne.quantite_restante : origLigne.quantite;
 
                 $(this).find('.avoir-pu-input').val(rabaisPu);
                 $(this).find('.avoir-pu-display').text(Number(rabaisPu).toLocaleString('fr-FR') + ' F');
-                $(this).find('.avoir-qte-input').val(origLigne.quantite).prop('readonly', true).addClass('bg-light');
+                $(this).find('.avoir-qte-input').val(qRest).prop('readonly', true).addClass('bg-light');
             });
 
             recalcAvoirTotal();
@@ -2030,6 +2116,23 @@
             $('#avoirTotalTaxes').text(Number(sumTaxes).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' F');
             $('#avoirTotalBic').text(Number(sumBic).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' F');
             $('#avoirTotalDisplay').text(Number(sumTotal).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' F');
+
+            // Plafonnement strict sur le solde disponible pour avoir
+            const soldeDispo = (currentInvoiceData && currentInvoiceData.solde_avoir_disponible !== undefined)
+                ? currentInvoiceData.solde_avoir_disponible
+                : quickAvoirSoldeDispo;
+
+            if (sumTotal > (soldeDispo + 0.009)) {
+                $('#avoir_solde_depasse_text').text('Dépassement du solde éligible (' + Number(soldeDispo).toLocaleString('fr-FR') + ' F). Réduisez les quantités.');
+                $('#avoir_solde_depasse_alert').show();
+                $('#btnSubmitQuickAvoir').prop('disabled', true);
+            } else if (sumTotal <= 0.009) {
+                $('#avoir_solde_depasse_alert').hide();
+                $('#btnSubmitQuickAvoir').prop('disabled', true);
+            } else {
+                $('#avoir_solde_depasse_alert').hide();
+                $('#btnSubmitQuickAvoir').prop('disabled', false);
+            }
 
             // Analyse Trésorerie en Temps Réel
             const totalAvoir = Math.round(sumTotal);
@@ -2772,6 +2875,7 @@
                 new bootstrap.Modal(document.getElementById('createFactureModal')).show();
             @endif
 
+            initHubBillingDataTable();
             if (typeof feather !== 'undefined') feather.replace();
             calculerSyntheseLive();
         });
