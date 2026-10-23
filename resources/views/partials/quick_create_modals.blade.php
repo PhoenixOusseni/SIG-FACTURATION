@@ -22,42 +22,46 @@
                     <div class="quick-create-errors d-none"></div>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="small">Désignation <span class="text-danger">*</span></label>
-                            <input class="form-control" name="assujeti" type="text" required>
+                            <label class="small fw-bold">Type client DGI <span class="text-danger">*</span></label>
+                            <select name="type_client" id="qc_type_client" class="form-select">
+                                <option value="CC" selected>CC — Client Comptant (Consommateur)</option>
+                                <option value="PM">PM — Personne morale (Entreprise)</option>
+                                <option value="PP">PP — Personne physique (Particulier)</option>
+                                <option value="PC">PC — Personne physique commerçante</option>
+                            </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="small">Catégorie <span class="text-danger">*</span></label>
+                            <label class="small fw-bold">Catégorie tarifaire <span class="text-danger">*</span></label>
                             <select name="categories_id" class="form-select" required>
-                                <option value="">Sélectionner</option>
+                                <option value="">Sélectionner une catégorie</option>
                                 @foreach ($categories as $categorie)
                                     <option value="{{ $categorie->id }}">{{ $categorie->code }} - {{ $categorie->libelle }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="small">Type client DGI</label>
-                            <select name="type_client" class="form-select">
-                                <option value="CC">CC — Consommateur</option>
-                                <option value="PM" selected>PM — Personne morale</option>
-                                <option value="PP">PP — Personne physique</option>
-                                <option value="PC">PC — Personne physique commerçante</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="small">Téléphone</label>
-                            <input class="form-control" name="telephone" type="text">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="small">IFU</label>
-                            <input class="form-control" name="ifu" type="text">
+                        <div class="col-md-6">
+                            <label class="small fw-bold">Nom / Raison sociale <span class="text-danger">*</span></label>
+                            <input class="form-control" name="assujeti" id="qc_assujeti" type="text" placeholder="Ex: CLIENT COMPTANT" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="small">Adresse</label>
-                            <input class="form-control" name="adresse" type="text">
+                            <label class="small fw-bold">N° Téléphone <span class="qc-req text-danger d-none">*</span></label>
+                            <input class="form-control" name="telephone" id="qc_telephone" type="tel" placeholder="+226 XX XX XX XX">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">N° IFU <span class="qc-req text-danger d-none">*</span></label>
+                            <input class="form-control" name="ifu" id="qc_ifu" type="text" placeholder="Ex: 00012345A">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">N° RCCM <span class="qc-req text-danger d-none">*</span></label>
+                            <input class="form-control" name="rccm" id="qc_rccm" type="text" placeholder="Ex: BF OUA 2024 B 1234">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold">Adresse géographique <span class="qc-req text-danger d-none">*</span></label>
+                            <input class="form-control" name="adresse" id="qc_adresse" type="text" placeholder="Ville, Secteur">
                         </div>
                         <div class="col-md-6">
                             <label class="small">Email</label>
-                            <input class="form-control" name="email" type="email">
+                            <input class="form-control" name="email" type="email" placeholder="email@exemple.com">
                         </div>
                     </div>
                 </div>
@@ -113,13 +117,8 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="small">PSVBB</label>
-                            <select name="bic_id" class="form-select">
-                                <option value="">—</option>
-                                @foreach ($bics as $bic)
-                                    <option value="{{ $bic->id }}">{{ $bic->intitule }} ({{ $bic->taux }}%)</option>
-                                @endforeach
-                            </select>
+                            <label class="small">Montant TS (FCFA)</label>
+                            <input class="form-control" name="montant_ts" type="number" min="0" step="0.01" value="0">
                         </div>
                         <div class="col-md-3">
                             <label class="small">Type produit</label>
@@ -226,3 +225,50 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const qcType = document.getElementById('qc_type_client');
+    if (!qcType) return;
+    function updateQcRules() {
+        const val = qcType.value;
+        const reqStars = document.querySelectorAll('#quickCreateClientModal .qc-req');
+        const phone = document.getElementById('qc_telephone');
+        const ifu = document.getElementById('qc_ifu');
+        const rccm = document.getElementById('qc_rccm');
+        const addr = document.getElementById('qc_adresse');
+        const name = document.getElementById('qc_assujeti');
+
+        if (val === 'PM' || val === 'PC') {
+            reqStars.forEach(s => s.classList.remove('d-none'));
+            if (phone) phone.required = true;
+            if (ifu) ifu.required = true;
+            if (rccm) rccm.required = true;
+            if (addr) addr.required = true;
+            if (name && name.value === 'CLIENT COMPTANT') name.value = '';
+        } else if (val === 'PP') {
+            reqStars.forEach(s => s.classList.add('d-none'));
+            const phoneStar = phone?.parentElement?.querySelector('.qc-req');
+            const addrStar = addr?.parentElement?.querySelector('.qc-req');
+            if (phoneStar) phoneStar.classList.remove('d-none');
+            if (addrStar) addrStar.classList.remove('d-none');
+            if (phone) phone.required = true;
+            if (addr) addr.required = true;
+            if (ifu) ifu.required = false;
+            if (rccm) rccm.required = false;
+            if (name && name.value === 'CLIENT COMPTANT') name.value = '';
+        } else {
+            // CC
+            reqStars.forEach(s => s.classList.add('d-none'));
+            if (phone) phone.required = false;
+            if (ifu) ifu.required = false;
+            if (rccm) rccm.required = false;
+            if (addr) addr.required = false;
+            if (name && !name.value.trim()) name.value = 'CLIENT COMPTANT';
+        }
+    }
+    qcType.addEventListener('change', updateQcRules);
+    updateQcRules();
+});
+</script>
+

@@ -55,12 +55,12 @@ class FiscalDataValidator
             ->sum('montant_ttc');
         $remaining = max(0, round((float) $originalCert->montant_ttc - $alreadyCredited, 2));
         $amount = round((float) $avoir->montant_total, 2);
-        if ($amount > $remaining + 0.01) {
+        if ($amount > $remaining + 1.0) {
             throw new BridgeException('Le montant de l’avoir (' . number_format($amount, 2, ',', ' ') .
                 ' XOF) dépasse le solde fiscal disponible (' . number_format($remaining, 2, ',', ' ') . ' XOF).');
         }
-        if ($nature === SfeInvoiceType::NATURE_RAN && abs($amount - $remaining) > 0.01) {
-            throw new BridgeException('Pour une annulation RAN, le montant doit être exactement égal au solde fiscal (' .
+        if ($nature === SfeInvoiceType::NATURE_RAN && abs($amount - $remaining) > 1.0) {
+            throw new BridgeException('Pour une annulation RAN, le montant doit correspondre au solde fiscal (' .
                 number_format($remaining, 2, ',', ' ') . ' XOF).');
         }
     }

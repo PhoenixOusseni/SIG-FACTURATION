@@ -40,7 +40,7 @@
                                                             <th>Client</th>
                                                             <th>Type</th>
                                                             <th>Mode de Paiement</th>
-                                                            <th>BIC</th>
+                                                            <th>PSVB</th>
                                                             <th>Ligne service</th>
                                                             <th>Date</th>
                                                             <th>Action</th>

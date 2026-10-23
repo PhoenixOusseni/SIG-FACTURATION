@@ -13,7 +13,7 @@
 
 ## Overview
 
-`sig-facturation` is a Laravel 8 monolith for Benin/West Africa that already covers fiscal client invoices (`Facture` + `ElementFacture`, codes `FAC-#####/YYYY`), SFE/MCF certification via a local bridge (`app/Services/SFE/*`, `McfController`, `mcf_certifications`), stock, contribuables, modepaie, règlements, proforma, bordereau de livraison, and facture d’avoir.
+`sig-facturation` is a Laravel 8 monolith for Burkina Faso / DGI (SECeF ST 1.0) that already covers fiscal client invoices (`Facture` + `ElementFacture`, codes `FAC-#####/YYYY`), SFE/MCF certification via a local bridge (`app/Services/SFE/*`, `McfController`, `mcf_certifications`), stock, contribuables, modepaie, règlements, proforma, bordereau de livraison, and facture d’avoir.
 
 The client needs a **Facturation Comptoir** (POS / counter sales) module for rapid walk-in sales at a cash register. These sales are **explicitly outside the MCF/SFE fiscal certification path**. Tickets must never call `InvoiceSigningService`, never write to `mcf_certifications`, and never set `sfe_locked_at`. Optionally, a set of paid tickets can later be **converted** into one classic `Facture` (which **is** eligible for explicit MCF certification afterward via the existing facture show / MCF UI — isolation is ticket-only, not “batch stays non-fiscal forever”).
 

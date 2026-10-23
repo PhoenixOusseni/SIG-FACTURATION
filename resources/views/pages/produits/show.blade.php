@@ -1,4 +1,4 @@
-﻿@extends('layouts.master')
+@extends('layouts.master')
 
 @section('title')
     <title>SIG - CFE | {{ $item->code }} — {{ $item->designation }}</title>
@@ -123,12 +123,10 @@
                     @php
                         $qte      = (float)($item->qte ?? 0);
                         $taux     = $item->tva ? (float)$item->tva->taux : 0;
-                        $tauxBic  = $item->bic ? (float)$item->bic->taux : 0;
                         $ht       = (float)($item->prix_unitaire ?? 0);
-                        $tvaAmt   = $ht * $taux / 100;
-                        $ttc      = $ht + $tvaAmt;
-                        $bicAmt   = $ttc * $tauxBic / 100;
-                        $ttcBic   = $ttc + $bicAmt;
+                        $tsAmt    = (float)($item->montant_ts ?? 0);
+                        $tvaAmt   = ($ht + $tsAmt) * $taux / 100;
+                        $ttc      = $ht + $tsAmt + $tvaAmt;
                     @endphp
 
                     <div class="col-md-3 py-3 px-4">
@@ -155,16 +153,16 @@
 
                     <div class="col-md-3 py-3 px-4 divider-v">
                         <div class="info-label"><i class="fas fa-percent me-1"></i>TVA
-                            @if ($item->tva) ({{ $taux }} %) @endif
+                            @if ($item->tva) (Groupe {{ $item->tva->code }} - {{ $taux }} %) @endif
                         </div>
                         <div class="info-value large text-info">{{ number_format($tvaAmt, 2, ',', ' ') }}</div>
                         <small class="text-muted">{{ $item->tva ? $item->tva->intitule : '—' }}</small>
                     </div>
 
                     <div class="col-md-3 py-3 px-4 divider-v">
-                        <div class="info-label"><i class="fas fa-calculator me-1"></i>Prix TTC + PSVBB</div>
-                        <div class="info-value large text-success">{{ number_format($ttcBic, 2, ',', ' ') }}</div>
-                        <small class="text-muted">FCFA</small>
+                        <div class="info-label"><i class="fas fa-calculator me-1"></i>Prix Estimé TTC</div>
+                        <div class="info-value large text-success">{{ number_format($ttc, 2, ',', ' ') }}</div>
+                        <small class="text-muted">FCFA @if($tsAmt > 0) (dont TS {{ number_format($tsAmt, 2, ',', ' ') }} F) @endif</small>
                     </div>
                 </div>
 
@@ -172,11 +170,11 @@
                 <div class="row gx-0 border-bottom px-3 py-3">
 
                     <div class="col-md-3 info-block px-3">
-                        <div class="info-label">PSVBB</div>
+                        <div class="info-label">Régime TVA DGI</div>
                         <div class="info-value">
-                            @if ($item->bic)
-                                {{ $item->bic->intitule }} — {{ $tauxBic }} %
-                                <small class="text-muted">({{ number_format($bicAmt, 2, ',', ' ') }} FCFA)</small>
+                            @if ($item->tva)
+                                Groupe {{ $item->tva->code }} ({{ $item->tva->taux }}%)
+                                <br><small class="text-muted">{{ $item->tva->intitule }}</small>
                             @else
                                 <span class="text-muted">—</span>
                             @endif
@@ -346,24 +344,13 @@
                                 <label class="small mb-1">Stock</label>
                                 <input type="number" min="0" step="0.01" class="form-control" name="qte" value="{{ old('qte', $item->qte) }}">
                             </div>
-                            <div class="col-md-3">
-                                <label class="small mb-1">TVA</label>
+                            <div class="col-md-6">
+                                <label class="small mb-1">Groupe TVA</label>
                                 <select class="form-select" name="tva_id">
-                                    <option value="">-- Aucune --</option>
+                                    <option value="">-- Aucun --</option>
                                     @foreach ($tvas as $tva)
                                         <option value="{{ $tva->id }}" {{ old('tva_id', $item->tva_id) == $tva->id ? 'selected' : '' }}>
-                                            {{ $tva->intitule }} ({{ $tva->taux }} %)
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="small mb-1">PSVBB</label>
-                                <select class="form-select" name="bic_id">
-                                    <option value="">-- Aucun --</option>
-                                    @foreach ($bics as $bic)
-                                        <option value="{{ $bic->id }}" {{ old('bic_id', $item->bic_id) == $bic->id ? 'selected' : '' }}>
-                                            {{ $bic->intitule ?? $bic->code }} ({{ $bic->taux }} %)
+                                            Groupe {{ $tva->code }} — {{ $tva->intitule }} ({{ $tva->taux }} %)
                                         </option>
                                     @endforeach
                                 </select>

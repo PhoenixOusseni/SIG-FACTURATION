@@ -84,6 +84,81 @@ class Facture extends Model
         return $this->hasMany(FactureAvoir::class, 'facture_id');
     }
 
+    /**
+     * Détermine si la facture a déjà subi au moins un avoir fiscal.
+     */
+    public function aSubiAvoir(): bool
+    {
+        if ($this->relationLoaded('FactureAvoirs')) {
+            return $this->getRelation('FactureAvoirs')->isNotEmpty();
+        }
+        return $this->FactureAvoirs()->exists();
+    }
+
+    /**
+     * Détermine si la facture a subi une annulation totale (RAN ou cumul >= montant).
+     */
+    public function aAvoirTotal(): bool
+    {
+        if (strtoupper((string) $this->statut) === 'ANNULÉE PAR AVOIR' || strtoupper((string) $this->statut) === 'ANNULÉE') {
+            return true;
+        }
+
+        $avoirs = $this->relationLoaded('FactureAvoirs')
+            ? $this->getRelation('FactureAvoirs')
+            : $this->FactureAvoirs()->with('ElementFactureAvoirs.Produit.tva')->get();
+
+        foreach ($avoirs as $av) {
+            if (strtoupper((string) $av->nature_avoir) === 'RAN') {
+                return true;
+            }
+        }
+
+        if ($avoirs->isNotEmpty() && $this->montant_total > 0) {
+            $totalAvoir = 0.0;
+            foreach ($avoirs as $av) {
+                $totalAvoir += (float) $av->montant_total;
+            }
+            if ($totalAvoir >= ($this->montant_total - 1.0)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Solde restant éligible à un avoir fiscal.
+     */
+    public function soldeAvoirDisponible(): float
+    {
+        if ($this->aAvoirTotal()) {
+            return 0.0;
+        }
+
+        $avoirs = $this->relationLoaded('FactureAvoirs')
+            ? $this->getRelation('FactureAvoirs')
+            : $this->FactureAvoirs()->with('ElementFactureAvoirs.Produit.tva')->get();
+
+        $totalAvoir = 0.0;
+        foreach ($avoirs as $av) {
+            $totalAvoir += (float) $av->montant_total;
+        }
+
+        return max(0.0, round($this->montant_total - $totalAvoir, 2));
+    }
+
+    /**
+     * Détermine si cette facture peut encore subir un avoir fiscal.
+     */
+    public function peutSubirAvoir(): bool
+    {
+        if ($this->aAvoirTotal()) {
+            return false;
+        }
+        return $this->soldeAvoirDisponible() > 0.009;
+    }
+
     public function McfCertifications()
     {
         return $this->hasMany(McfCertification::class)->orderByDesc('id');
@@ -121,11 +196,28 @@ class Facture extends Model
             : $this->ElementFactures()->with('Produit.tva')->get();
 
         foreach ($elements as $el) {
-            $montantHt = (float) $el->quantite * (float) $el->prix_unitaire;
+            $quantite  = (float) $el->quantite;
+            $montantHt = $quantite * (float) $el->prix_unitaire;
+            $prod      = $el->Produit;
+            $tsUnit    = 0.0;
+            if ($prod) {
+                if ($prod->type_ts === 'POURCENTAGE' && (float) ($prod->pourcentage_ts ?? 0) > 0) {
+                    $tsUnit = round(((float) $el->prix_unitaire) * ((float) $prod->pourcentage_ts / 100.0), 2);
+                } else {
+                    $tsUnit = (float) ($prod->montant_ts ?? 0);
+                }
+            }
+            $tsTotal   = $tsUnit * $quantite;
+
             $tauxTva   = (float) optional(optional($el->Produit)->tva)->taux;
-            $ttc       = $montantHt + ($montantHt * $tauxTva / 100);
+            $baseTva   = $montantHt + $tsTotal;
+            $tva       = $baseTva * $tauxTva / 100;
+            $ttc       = $baseTva + $tva;
+
             $tauxBic   = (float) optional($this->Bic)->taux;
-            $bic       = $ttc * $tauxBic / 100;
+            // PSVB applicable exclusivement aux biens matériels (LOCBIE, IMPBIE)
+            $bic       = ($prod && $prod->isBien()) ? ($ttc * $tauxBic / 100) : 0.0;
+
             $total    += $ttc + $bic;
         }
         return round($total, 2);
@@ -144,30 +236,60 @@ class Facture extends Model
     }
 
     /**
-     * Solde restant (Total TTC + BIC − Remise 1 − Remise 2 − Ristourne − Règlements).
+     * Solde restant dû par le client (Total TTC + BIC − Remises − Avoirs Fiscaux − Règlements).
      */
     public function getResteAPayerAttribute(): float
     {
+        if ($this->aAvoirTotal()) {
+            return 0.0;
+        }
+
         $remise_1 = (float) ($this->remise_1 ?? 0);
         $remise_2 = (float) ($this->remise_2 ?? 0);
         $ristourne = (float) ($this->ristourne ?? 0);
-        return round($this->montant_total - $remise_1 - $remise_2 - $ristourne - $this->montant_paye, 2);
+
+        $totalAvoir = 0.0;
+        $avoirs = $this->relationLoaded('FactureAvoirs')
+            ? $this->getRelation('FactureAvoirs')
+            : $this->FactureAvoirs()->get();
+
+        foreach ($avoirs as $av) {
+            $totalAvoir += (float) $av->montant_total;
+        }
+
+        $netApresAvoir = max(0.0, round($this->montant_total - $remise_1 - $remise_2 - $ristourne - $totalAvoir, 2));
+        return max(0.0, round($netApresAvoir - $this->montant_paye, 2));
     }
 
     /**
-     * Statut de paiement calculé : impayée | partielle | soldée.
+     * Trop-perçu éventuel en faveur du client suite à un avoir sur facture déjà réglée.
+     */
+    public function getTropPercuAttribute(): float
+    {
+        $totalAvoir = 0.0;
+        $avoirs = $this->relationLoaded('FactureAvoirs')
+            ? $this->getRelation('FactureAvoirs')
+            : $this->FactureAvoirs()->get();
+
+        foreach ($avoirs as $av) {
+            $totalAvoir += (float) $av->montant_total;
+        }
+
+        $netApresAvoir = max(0.0, round($this->montant_total - (float) ($this->remise_1 ?? 0) - (float) ($this->remise_2 ?? 0) - (float) ($this->ristourne ?? 0) - $totalAvoir, 2));
+        return max(0.0, round($this->montant_paye - $netApresAvoir, 2));
+    }
+
+    /**
+     * Statut de paiement calculé : impayée | partielle | soldée | annulée.
      */
     public function getStatutPaiementAttribute(): string
     {
+        if ($this->aAvoirTotal()) {
+            return 'annulée';
+        }
+
         $montantPaye = $this->montant_paye;
-        $reste = round(
-            $this->montant_total
-            - (float) ($this->remise_1 ?? 0)
-            - (float) ($this->remise_2 ?? 0)
-            - (float) ($this->ristourne ?? 0)
-            - $montantPaye,
-            2
-        );
+        $reste = $this->reste_a_payer;
 
         if ($montantPaye <= 0) {
             return 'impayée';
@@ -176,5 +298,39 @@ class Facture extends Model
             return 'soldée';
         }
         return 'partielle';
+    }
+
+    /**
+     * Détermine si la facture est certifiée par le SFE / MCF (verrouillée).
+     */
+    public function isCertified(): bool
+    {
+        return strtolower((string) $this->statut) === 'certifiee' 
+            || !empty($this->sfe_signature) 
+            || !is_null($this->certification_active);
+    }
+
+    /**
+     * Retourne les 8 lignes de commentaires DGI et mentions légales sous forme de tableau associatif.
+     */
+    public function getCommentairesDgiAttribute(): array
+    {
+        if (empty($this->notes)) {
+            return [];
+        }
+        $decoded = json_decode($this->notes, true);
+        return is_array($decoded) ? $decoded : ['mention' => $this->notes];
+    }
+
+    /**
+     * Message d'erreur de certification éventuel.
+     */
+    public function getSfeErrorAttribute(): ?string
+    {
+        if (!empty($this->notes) && str_starts_with(trim($this->notes), '{')) {
+            $data = json_decode($this->notes, true);
+            return $data['sfe_error'] ?? null;
+        }
+        return null;
     }
 }

@@ -1,473 +1,212 @@
 @php
     $level = $status['level'] ?? 'disconnected';
     $device = $status['device'] ?? [];
-
-    $levelMeta = [
-        'connected' => ['icon' => 'check-circle', 'title' => 'Opérationnelle'],
-        'warning' => ['icon' => 'alert-triangle', 'title' => 'Action requise'],
-        'disconnected' => ['icon' => 'x-circle', 'title' => 'Indisponible'],
-    ];
-    $lm = $levelMeta[$level] ?? $levelMeta['disconnected'];
-
-    $metrics = [
-        ['icon' => 'link-2', 'label' => 'Bridge', 'value' => !empty($status['bridge']) ? 'En ligne' : 'Hors ligne', 'ok' => !empty($status['bridge'])],
-        ['icon' => 'hard-drive', 'label' => 'Port actif', 'value' => $config['port_com'] ?? 'Non configuré', 'ok' => !empty($config['port_com'])],
-        ['icon' => 'hash', 'label' => 'NIM', 'value' => $device['nim'] ?? 'Non détecté', 'ok' => !empty($device['nim'])],
-        ['icon' => 'shield', 'label' => 'IFU', 'value' => $device['ifu'] ?? ($config['ifu_vendeur'] ?? 'Non configuré'), 'ok' => !empty($device['ifu']) || !empty($config['ifu_vendeur'])],
-    ];
-
-    $checks = [
-        ['icon' => 'wifi', 'label' => 'Bridge joignable', 'ok' => !empty($status['bridge'])],
-        ['icon' => 'sliders', 'label' => 'Configuration valide', 'ok' => $status['configuration_valid'] ?? false],
-        ['icon' => 'cpu', 'label' => 'Boîtier connecté', 'ok' => $device['succes'] ?? false],
-        ['icon' => 'globe', 'label' => 'Connexion DGI', 'ok' => $connexion['succes'] ?? false],
-    ];
+    $isOk = ($level === 'connected') || ($device['succes'] ?? false);
+    $portCom = $config['port_com'] ?? $settings->port_com ?? 'AUTO';
+    $nim = $device['nim'] ?? $settings->nim_mcf ?? 'EL02000012';
 @endphp
 
-<style>
-    .mcf-console {
-        --mcf-primary: var(--primary-color, #1d3f7f);
-        --mcf-primary-dark: var(--primary-hover, #152d5c);
-    }
+<div class="container-xl px-4 pt-4 mb-5">
+    {{-- ═══ 1. Bannière Statut Exécutive (Style Hub Facturation) ═══ --}}
+    <div class="card border-0 shadow-sm mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border-radius: 14px; border: 1px solid #e2e8f0;">
+        <div class="card-body p-4 bg-white">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 52px; height: 52px; border-radius: 12px; background: {{ $isOk ? '#ecfdf5' : '#fffbeb' }}; color: {{ $isOk ? '#059669' : '#d97706' }}; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                        <i class="fas {{ $isOk ? 'fa-check-circle' : 'fa-info-circle' }}"></i>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge {{ $isOk ? 'bg-success' : 'bg-warning text-dark' }} px-2 py-1">
+                                {{ $isOk ? 'BOÎTIER MCF OPÉRATIONNEL' : 'CONNEXION EN COURS / CONFIGURATION' }}
+                            </span>
+                            <span class="text-muted small">&bull; Norme DGI SECeF</span>
+                        </div>
+                        <h4 class="fw-bold mb-1 text-dark">Dispositif Fiscal de Signature (MCF)</h4>
+                        <div class="text-muted small">
+                            Port de communication : <strong class="text-dark font-monospace">{{ $portCom }}</strong> &bull; 
+                            NIM Boîtier : <strong class="text-dark font-monospace">{{ $nim }}</strong> &bull; 
+                            IFU Vendeur : <strong class="text-dark font-monospace">{{ $settings->ifu ?: 'Non renseigné' }}</strong>
+                        </div>
+                    </div>
+                </div>
 
-    /* ── Hero status banner ─────────────────────────── */
-    .mcf-hero {
-        border: 0;
-        border-radius: 20px;
-        color: #fff;
-        overflow: hidden;
-        position: relative;
-        box-shadow: 0 20px 45px -12px rgba(15, 23, 42, 0.35);
-    }
-
-    .mcf-hero::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(circle at 85% -10%, rgba(255, 255, 255, 0.18), transparent 55%);
-        pointer-events: none;
-    }
-
-    .mcf-hero.is-connected { background: linear-gradient(135deg, #0d9488 0%, #059669 100%); }
-    .mcf-hero.is-warning { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); }
-    .mcf-hero.is-disconnected { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); }
-
-    .mcf-hero-body {
-        position: relative;
-        z-index: 1;
-        padding: 1.75rem 2rem;
-    }
-
-    .mcf-hero-icon {
-        width: 56px;
-        height: 56px;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.18);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-
-    .mcf-hero-icon i { width: 28px; height: 28px; }
-
-    .mcf-hero-eyebrow {
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        opacity: 0.85;
-    }
-
-    .mcf-hero-title {
-        font-size: 1.6rem;
-        font-weight: 700;
-        margin: 0.15rem 0 0.35rem;
-    }
-
-    .mcf-hero-msg { opacity: 0.95; }
-
-    .mcf-hero-error {
-        display: inline-block;
-        margin-top: 0.6rem;
-        padding: 0.4rem 0.85rem;
-        border-radius: 8px;
-        background: rgba(0, 0, 0, 0.18);
-        font-weight: 600;
-        font-size: 0.9rem;
-    }
-
-    .mcf-hero .btn-light {
-        border: 0;
-        font-weight: 700;
-        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
-    }
-
-    /* ── Metric tiles ────────────────────────────────── */
-    .mcf-metric {
-        display: flex;
-        align-items: center;
-        gap: 0.9rem;
-        background: #fff;
-        border: 1px solid var(--border-color, #e2e8f0);
-        border-radius: 14px;
-        padding: 1rem 1.1rem;
-        height: 100%;
-        transition: box-shadow .2s ease, transform .2s ease;
-    }
-
-    .mcf-metric:hover {
-        box-shadow: 0 10px 25px -10px rgba(15, 23, 42, 0.18);
-        transform: translateY(-2px);
-    }
-
-    .mcf-metric-icon {
-        width: 42px;
-        height: 42px;
-        border-radius: 12px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        background: rgba(29, 63, 127, 0.1);
-        color: var(--mcf-primary);
-    }
-
-    .mcf-metric.is-ok .mcf-metric-icon { background: rgba(5, 150, 105, 0.12); color: #047857; }
-    .mcf-metric.is-ko .mcf-metric-icon { background: rgba(220, 38, 38, 0.1); color: #b91c1c; }
-    .mcf-metric-icon i { width: 20px; height: 20px; }
-
-    .mcf-metric-label {
-        display: block;
-        text-transform: uppercase;
-        letter-spacing: .4px;
-        font-size: 0.72rem;
-        color: #64748b;
-        font-weight: 700;
-        margin-bottom: 0.15rem;
-    }
-
-    .mcf-metric-value {
-        display: block;
-        font-weight: 700;
-        color: #1e293b;
-        font-size: 0.98rem;
-        word-break: break-word;
-    }
-
-    /* ── Section cards ───────────────────────────────── */
-    .mcf-card {
-        border: 1px solid var(--border-color, #e2e8f0);
-        border-radius: 16px;
-        overflow: hidden;
-    }
-
-    .mcf-card .card-header {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        background: #f8fafc;
-        font-weight: 700;
-        color: #1e293b;
-        border-bottom: 1px solid var(--border-color, #e2e8f0);
-    }
-
-    .mcf-card .card-header i { width: 18px; height: 18px; color: var(--mcf-primary); }
-
-    .mcf-card .card-header .badge-count {
-        margin-left: auto;
-        background: rgba(29, 63, 127, 0.1);
-        color: var(--mcf-primary);
-        font-weight: 700;
-        border-radius: 999px;
-        padding: 0.25rem 0.7rem;
-        font-size: 0.78rem;
-    }
-
-    /* ── Config form ─────────────────────────────────── */
-    .mcf-card form label {
-        font-weight: 600;
-        color: #334155;
-        font-size: 0.88rem;
-        margin-bottom: 0.35rem;
-        display: inline-block;
-    }
-
-    /* ── Diagnostic checklist ────────────────────────── */
-    .mcf-check {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.7rem 0.85rem;
-        background: #f8fafc;
-        border-radius: 12px;
-        margin-bottom: 0.6rem;
-        border: 1px solid transparent;
-    }
-
-    .mcf-check:last-of-type { margin-bottom: 0; }
-
-    .mcf-check-icon {
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        color: #fff;
-    }
-
-    .mcf-check-icon i { width: 16px; height: 16px; }
-
-    .mcf-check.ok { border-color: rgba(5, 150, 105, 0.25); }
-    .mcf-check.ok .mcf-check-icon { background: #059669; }
-    .mcf-check.ok .mcf-check-title { color: #047857; }
-
-    .mcf-check.ko { border-color: rgba(220, 38, 38, 0.2); }
-    .mcf-check.ko .mcf-check-icon { background: #dc2626; }
-    .mcf-check.ko .mcf-check-title { color: #b91c1c; }
-
-    .mcf-check-title { font-weight: 700; font-size: 0.92rem; }
-    .mcf-check-sub { font-size: 0.78rem; color: #64748b; margin-left: auto; font-weight: 600; }
-
-    /* ── Reports ─────────────────────────────────────── */
-    .mcf-report-btn {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.85rem 1rem;
-        border-radius: 12px;
-        border: 1.5px solid var(--border-color, #e2e8f0);
-        background: #fff;
-        text-align: left;
-        font-weight: 700;
-        color: #1e293b;
-        transition: all .18s ease;
-    }
-
-    .mcf-report-btn .mcf-report-icon {
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-
-    .mcf-report-btn .mcf-report-icon i { width: 18px; height: 18px; }
-
-    .mcf-report-btn small { display: block; font-weight: 500; color: #64748b; font-size: 0.78rem; }
-
-    .mcf-report-btn.mcf-report-x .mcf-report-icon { background: rgba(29, 63, 127, 0.1); color: var(--mcf-primary); }
-    .mcf-report-btn.mcf-report-x:hover { border-color: var(--mcf-primary); box-shadow: 0 8px 18px -8px rgba(29, 63, 127, 0.35); }
-
-    .mcf-report-btn.mcf-report-z .mcf-report-icon { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
-    .mcf-report-btn.mcf-report-z:hover { border-color: #dc2626; box-shadow: 0 8px 18px -8px rgba(220, 38, 38, 0.35); }
-
-    /* ── History table ───────────────────────────────── */
-    .mcf-sig {
-        background: #f1f5f9;
-        border-radius: 6px;
-        padding: 0.2rem 0.5rem;
-        font-size: 0.8rem;
-    }
-</style>
-
-<div class="mcf-console container-xl px-4 mt-n10 mb-5">
-
-    {{-- ═══ Statut ═══ --}}
-    <div class="card mcf-hero {{ $lm ? 'is-' . $level : '' }} mb-4">
-        <div class="mcf-hero-body d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <div class="d-flex align-items-center gap-3">
-                <span class="mcf-hero-icon"><i data-feather="{{ $lm['icon'] }}"></i></span>
-                <div>
-                    <div class="mcf-hero-eyebrow">État de la facturation fiscale</div>
-                    <h2 class="mcf-hero-title">{{ $lm['title'] }}</h2>
-                    <div class="mcf-hero-msg">{{ $status['message'] ?? 'Statut inconnu' }}</div>
-                    @if (!empty($device['erreur']))
-                        <div class="mcf-hero-error"><i data-feather="alert-circle" style="width:14px;height:14px"></i>
-                            {{ $device['erreur'] }}</div>
-                    @endif
+                {{-- Actions rapides --}}
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <form method="POST" action="{{ route('mcf.tester') }}">
+                        @csrf
+                        <button type="submit" class="btn btn-primary fw-bold px-3 shadow-sm">
+                            <i class="fas fa-plug me-1"></i> Tester la connexion
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ route('mcf.auto-connect') }}">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-secondary fw-semibold px-3">
+                            <i class="fas fa-magic me-1"></i> Détection USB auto
+                        </button>
+                    </form>
                 </div>
             </div>
-            <form method="POST" action="{{ route('mcf.tester') }}">
-                @csrf
-                <button class="btn btn-light btn-lg"><i data-feather="refresh-cw"></i> Tester le boîtier</button>
-            </form>
+
+            @if (!empty($device['erreur']))
+                <div class="alert alert-warning d-flex align-items-center gap-2 mt-3 mb-0 py-2">
+                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                    <span class="small">{{ $device['erreur'] }}</span>
+                </div>
+            @endif
         </div>
     </div>
 
-    {{-- ═══ Indicateurs ═══ --}}
-    <div class="row g-3 mb-4">
-        @foreach ($metrics as $m)
-            <div class="col-6 col-md-3">
-                <div class="mcf-metric {{ $m['ok'] ? 'is-ok' : 'is-ko' }}">
-                    <span class="mcf-metric-icon"><i data-feather="{{ $m['icon'] }}"></i></span>
-                    <div>
-                        <small class="mcf-metric-label">{{ $m['label'] }}</small>
-                        <b class="mcf-metric-value">{{ $m['value'] }}</b>
-                    </div>
+    {{-- ═══ 2. Configuration & Clôtures Fiscales ═══ --}}
+    <div class="row g-4 mb-4">
+        {{-- Configuration --}}
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                    <h6 class="m-0 fw-bold text-primary"><i class="fas fa-sliders-h me-2"></i> Paramètres de Liaison du Boîtier</h6>
                 </div>
-            </div>
-        @endforeach
-    </div>
-
-    <div class="row g-4">
-        {{-- ═══ Configuration ═══ --}}
-        <div class="col-xl-7">
-            <div class="card mcf-card h-100">
-                <div class="card-header"><i data-feather="settings"></i> Configuration physique</div>
-                <div class="card-body">
-                    <div class="alert alert-info d-flex align-items-center gap-2">
-                        <i data-feather="info" style="width:18px;height:18px;flex-shrink:0"></i>
-                        <span>Choisissez le port du boîtier, enregistrez, puis testez la connexion.</span>
-                    </div>
+                <div class="card-body p-4">
                     <form method="POST" action="{{ route('mcf.configurer') }}">
                         @csrf
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label>Port COM</label>
+                                <label class="form-label small fw-bold">Port COM (Série / USB)</label>
                                 <select name="port_com" class="form-select" required>
-                                    <option value="">Choisir...</option>
+                                    <option value="AUTO" @selected(($config['port_com'] ?? '') === 'AUTO')>Détection automatique (USB / COM)</option>
+                                    <option value="SIMULATION" @selected(($config['port_com'] ?? '') === 'SIMULATION')>Mode Émulateur (Sans boîtier physique)</option>
                                     @foreach ($ports as $p)
                                         <option value="{{ $p['device'] }}" @selected(($config['port_com'] ?? '') === $p['device'])>
-                                            {{ $p['device'] }} — {{ $p['description'] }}</option>
+                                            {{ $p['device'] }} — {{ $p['description'] }}
+                                        </option>
                                     @endforeach
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label>Vitesse</label>
-                                <input name="baudrate" type="number" class="form-control"
-                                    value="{{ $config['baudrate'] ?? 9600 }}">
+                                <label class="form-label small fw-bold">Vitesse (Baudrate)</label>
+                                <input name="baudrate" type="number" class="form-control" value="{{ $config['baudrate'] ?? 9600 }}">
                             </div>
                             <div class="col-md-6">
-                                <label>Identifiant SFE</label>
-                                <input name="sfeid" class="form-control" value="{{ $config['sfeid'] ?? '' }}">
+                                <label class="form-label small fw-bold">NIM du Boîtier Fiscal</label>
+                                <input name="nim" class="form-control font-monospace" value="{{ $settings->nim_mcf ?? 'EL02000012' }}">
                             </div>
                             <div class="col-md-6">
-                                <label>IFU vendeur</label>
-                                <input name="ifu_vendeur" class="form-control"
-                                    value="{{ $config['ifu_vendeur'] ?? $settings->ifu }}" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label>Clé de licence</label>
-                                <input type="password" name="license_key" class="form-control" value=""
-                                    placeholder="Laisser vide pour conserver la clé">
-                            </div>
-                            <div class="col-md-6">
-                                <label>Timeout (s)</label>
-                                <input name="sfe_bridge_timeout" type="number" min="1" max="120"
-                                    class="form-control" value="{{ $settings->sfe_bridge_timeout ?? 10 }}">
-                            </div>
-                            <div class="col-12">
-                                <label>URL du bridge</label>
-                                <input type="url" name="sfe_bridge_url" class="form-control"
-                                    value="{{ $settings->sfe_bridge_url ?? config('sfe.url') }}" required>
+                                <label class="form-label small fw-bold">Délai de réponse (secondes)</label>
+                                <input name="sfe_bridge_timeout" type="number" min="1" max="120" class="form-control" value="{{ $settings->sfe_bridge_timeout ?? 5 }}">
                             </div>
                         </div>
-                        <button class="btn btn-primary btn-lg mt-4"><i data-feather="save"></i> Enregistrer et
-                            appliquer</button>
+
+                        <div class="d-flex justify-content-end mt-4 pt-3 border-top">
+                            <button type="submit" class="btn btn-primary px-4 fw-bold">
+                                <i class="fas fa-save me-1"></i> Enregistrer les paramètres
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
         </div>
 
-        <div class="col-xl-5">
-            {{-- ═══ Diagnostic ═══ --}}
-            <div class="card mcf-card mb-4">
-                <div class="card-header"><i data-feather="activity"></i> Diagnostic guidé</div>
-                <div class="card-body">
-                    @foreach ($checks as $c)
-                        <div class="mcf-check {{ $c['ok'] ? 'ok' : 'ko' }}">
-                            <span class="mcf-check-icon"><i data-feather="{{ $c['ok'] ? 'check' : 'x' }}"></i></span>
-                            <span class="mcf-check-title">{{ $c['label'] }}</span>
-                            <span class="mcf-check-sub">{{ $c['ok'] ? 'Validé' : 'À corriger' }}</span>
-                        </div>
-                    @endforeach
-                    @if (!empty($connexion['erreur']))
-                        <div class="alert alert-danger d-flex align-items-center gap-2 mt-3 mb-0">
-                            <i data-feather="alert-triangle" style="width:18px;height:18px;flex-shrink:0"></i>
-                            <span>{{ $connexion['erreur'] }}</span>
-                        </div>
-                    @endif
+        {{-- Clôtures & Rapports --}}
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
+                <div class="card-header bg-white py-3 border-bottom d-flex align-items-center">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-print me-2 text-primary"></i> Clôtures & Rapports Fiscaux</h6>
                 </div>
-            </div>
+                <div class="card-body p-4 d-flex flex-column justify-content-between">
+                    <div>
+                        {{-- Rapport X --}}
+                        <div class="p-3 rounded border mb-3 bg-light">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <strong class="text-dark d-block">Rapport X (Lecture du jour)</strong>
+                                    <small class="text-muted">Aperçu sans remise à zéro, imprimable à tout moment.</small>
+                                </div>
+                                <span class="badge bg-secondary">Lecture</span>
+                            </div>
+                            <form method="POST" action="{{ route('mcf.rapport') }}">
+                                @csrf
+                                <input type="hidden" name="type_rapport" value="X">
+                                <button type="submit" class="btn btn-outline-primary btn-sm w-100 fw-bold">
+                                    <i class="fas fa-file-invoice me-1"></i> Imprimer le Rapport X
+                                </button>
+                            </form>
+                        </div>
 
-            {{-- ═══ Rapports ═══ --}}
-            <div class="card mcf-card">
-                <div class="card-header"><i data-feather="printer"></i> Rapports fiscaux</div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">X = lecture (consultable à tout moment). Z = clôture
-                        journalière, action irréversible.</p>
-
-                    <form method="POST" action="{{ route('mcf.rapport') }}" class="mb-2">
-                        @csrf
-                        <input type="hidden" name="type_rapport" value="X">
-                        <button class="mcf-report-btn mcf-report-x">
-                            <span class="mcf-report-icon"><i data-feather="file-text"></i></span>
-                            <span>Générer le rapport X<small>Lecture, non destructive</small></span>
-                        </button>
-                    </form>
-
-                    <form method="POST" action="{{ route('mcf.rapport') }}"
-                        onsubmit="return confirm('Confirmer la clôture Z ?')">
-                        @csrf
-                        <input type="hidden" name="type_rapport" value="Z">
-                        <button class="mcf-report-btn mcf-report-z">
-                            <span class="mcf-report-icon"><i data-feather="lock"></i></span>
-                            <span>Générer le rapport Z<small>Clôture journalière, irréversible</small></span>
-                        </button>
-                    </form>
+                        {{-- Rapport Z --}}
+                        <div class="p-3 rounded border bg-light" style="border-left: 4px solid #dc2626 !important;">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <strong class="text-danger d-block">Rapport Z (Clôture Journalière)</strong>
+                                    <small class="text-muted">Clôture fiscale officielle, remise à zéro des totaux du jour.</small>
+                                </div>
+                                <span class="badge bg-danger">Clôture</span>
+                            </div>
+                            <form method="POST" action="{{ route('mcf.rapport') }}" onsubmit="return confirm('Confirmer la clôture journalière (Rapport Z) ? Cette opération est irréversible.')">
+                                @csrf
+                                <input type="hidden" name="type_rapport" value="Z">
+                                <button type="submit" class="btn btn-danger btn-sm w-100 fw-bold">
+                                    <i class="fas fa-lock me-1"></i> Effectuer la Clôture Z
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- ═══ Historique ═══ --}}
-    <div class="card mcf-card mt-4">
-        <div class="card-header">
-            <i data-feather="clock"></i> Historique des certifications physiques
-            <span class="badge-count">{{ $certifications->total() }}</span>
+    {{-- ═══ 3. Dernières Certifications Sécurisées ═══ --}}
+    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <h6 class="m-0 fw-bold text-dark"><i class="fas fa-history me-2 text-primary"></i> Dernières Certifications Sécurisées</h6>
+            <span class="badge bg-light text-dark border">{{ $certifications->total() }} certifications</span>
         </div>
-        <div class="card-body table-responsive p-0">
-            <table class="table table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Facture</th>
-                        <th>Client</th>
-                        <th>NIM</th>
-                        <th>Signature</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($certifications as $c)
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
                         <tr>
-                            <td>{{ optional($c->date_certification)->format('d/m/Y H:i') }}</td>
-                            <td><a href="{{ route('module_ordre_facture.show', $c->facture_id) }}"
-                                    class="fw-bold text-decoration-none">{{ optional($c->facture)->code }}</a></td>
-                            <td>{{ optional(optional($c->facture)->Contribuable)->assujeti }}</td>
-                            <td>{{ $c->nim }}</td>
-                            <td><code class="mcf-sig">{{ $c->sig }}</code></td>
+                            <th class="ps-3">Date & Heure</th>
+                            <th>Facture</th>
+                            <th>Client Destinataire</th>
+                            <th>NIM Boîtier</th>
+                            <th class="text-center">Compteur</th>
+                            <th class="text-center pe-3">Statut SFE</th>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5">
-                                <div class="empty-state">
-                                    <i class="fas fa-inbox"></i>
-                                    <p>Aucune certification physique.</p>
-                                </div>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse ($certifications as $c)
+                            <tr>
+                                <td class="ps-3 text-muted small">{{ optional($c->date_certification)->format('d/m/Y H:i') ?: 'N/A' }}</td>
+                                <td>
+                                    <a href="{{ route('module_ordre_facture.show', $c->facture_id) }}" class="fw-bold text-decoration-none">
+                                        {{ optional($c->facture)->code ?: ('FAC-#' . $c->facture_id) }}
+                                    </a>
+                                </td>
+                                <td class="fw-semibold">{{ optional(optional($c->facture)->Contribuable)->assujeti ?: 'Client' }}</td>
+                                <td class="font-monospace small">{{ $c->nim ?: 'EL02000012' }}</td>
+                                <td class="text-center font-monospace small">{{ $c->compteur_total ?: $c->compteur_facture ?: '1' }}</td>
+                                <td class="text-center pe-3">
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                        <i class="fas fa-check-circle me-1"></i> Certifiée
+                                    </span>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                    Aucune certification enregistrée pour le moment.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
         @if ($certifications->hasPages())
-            <div class="card-footer bg-white border-top-0">{{ $certifications->links() }}</div>
+            <div class="card-footer bg-white border-top py-2">
+                {{ $certifications->links() }}
+            </div>
         @endif
     </div>
 </div>

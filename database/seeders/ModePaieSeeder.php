@@ -17,11 +17,15 @@ class ModePaieSeeder extends Seeder
         $modes = [
             ['code' => 'ESP', 'libelle' => 'Espèce'],
             ['code' => 'CHQ', 'libelle' => 'Chèque'],
-            ['code' => 'VIR', 'libelle' => 'Virement'],
+            ['code' => 'VIR', 'libelle' => 'Virement bancaire'],
+            ['code' => 'CAR', 'libelle' => 'Carte bancaire'],
+            ['code' => 'MOB', 'libelle' => 'Mobile Money (Orange/Moov/Telecel)'],
+            ['code' => 'CRE', 'libelle' => 'Crédit / À terme'],
+            ['code' => 'AUT', 'libelle' => 'Autre'],
         ];
 
         foreach ($modes as $mode) {
-            ModePaie::firstOrCreate(
+            ModePaie::updateOrCreate(
                 ['code' => $mode['code']],
                 ['libelle' => $mode['libelle']]
             );

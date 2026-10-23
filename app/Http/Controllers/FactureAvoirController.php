@@ -38,37 +38,99 @@ class FactureAvoirController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $factures = Facture::with(['Contribuable', 'ElementFactures.Produit'])
-            ->where('statut', '!=', 'annulée')
+        $factures = Facture::with(['Contribuable', 'ElementFactures.Produit', 'FactureAvoirs.ElementFactureAvoirs.Produit.tva'])
+            ->whereNotIn('statut', ['annulée', 'Annulée par Avoir'])
             ->orderByDesc('id')
-            ->get();
+            ->get()
+            ->filter(function ($f) {
+                return $f->isCertified() && $f->peutSubirAvoir();
+            })
+            ->values();
+
         $contribuables = Contribuable::orderBy('assujeti')->get();
-        $produits = Produit::orderBy('code')->get();
+        $produits = Produit::with('tva')->orderBy('code')->get();
         $produitsData = $produits->keyBy('id')->map(function ($produit) {
             return [
                 'code' => $produit->code,
                 'designation' => $produit->designation,
-                'prix_unitaire' => $produit->prix_unitaire,
-                'qte' => $produit->qte,
+                'prix_unitaire' => (float) $produit->prix_unitaire,
+                'qte' => (float) $produit->qte,
+                'taux_tva' => (float) optional(optional($produit)->tva)->taux,
+                'type_ts' => (string) ($produit->type_ts ?? 'AUCUNE'),
+                'montant_ts' => (float) ($produit->montant_ts ?? 0),
+                'pourcentage_ts' => (float) ($produit->pourcentage_ts ?? 0),
+                'is_bien' => (bool) $produit->isBien(),
+                'is_service' => (bool) $produit->isService(),
             ];
         });
 
-        // Préparer les données factures pour auto-remplissage
+        // Préparer les données factures pour auto-remplissage et rappel dans le formulaire
         $facturesData = [];
         foreach ($factures as $f) {
+            $tauxBic = (float) optional($f->Bic)->taux;
             $facturesData[$f->id] = [
                 'code' => $f->code,
+                'date' => $f->date ? \Carbon\Carbon::parse($f->date)->format('d/m/Y') : '',
                 'client_id' => $f->Contribuable?->id,
                 'client_name' => $f->Contribuable?->assujeti,
+                'client_ifu' => $f->Contribuable?->ifu,
+                'taux_bic' => $tauxBic,
+                'total_facture' => (float) $f->montant_total,
+                'solde_disponible' => (float) $f->soldeAvoirDisponible(),
+                'montant_paye' => (float) $f->montant_paye,
+                'reste_a_payer' => (float) $f->reste_a_payer,
+                'trop_percu' => (float) $f->trop_percu,
+                'statut_paiement' => $f->statut_paiement,
                 'objet' => $f->objet,
                 'reference' => $f->reference,
-                'remise_1' => $f->remise_1,
-                'remise_2' => $f->remise_2,
-                'lignes' => $f->ElementFactures->map(function ($element) {
+                'remise_1' => (float) ($f->remise_1 ?? 0),
+                'remise_2' => (float) ($f->remise_2 ?? 0),
+                'lignes' => $f->ElementFactures->map(function ($element) use ($tauxBic) {
+                    $prod = $element->Produit;
+                    $qte = (float) $element->quantite;
+                    $pu = (float) $element->prix_unitaire;
+                    $montantHt = $qte * $pu;
+
+                    $typeTs = $prod ? (string) $prod->type_ts : 'AUCUNE';
+                    $montantTsFixe = $prod ? (float) ($prod->montant_ts ?? 0) : 0.0;
+                    $pctTs = $prod ? (float) ($prod->pourcentage_ts ?? 0) : 0.0;
+                    $tsUnit = 0.0;
+                    if ($typeTs === 'POURCENTAGE' && $pctTs > 0) {
+                        $tsUnit = round($pu * ($pctTs / 100.0), 2);
+                    } elseif ($montantTsFixe > 0) {
+                        $tsUnit = $montantTsFixe;
+                    }
+                    $tsTotal = round($tsUnit * $qte, 2);
+
+                    $groupeTva = $prod ? strtoupper((string) optional($prod->tva)->code ?: 'A') : 'A';
+                    $tauxTva = ($groupeTva === 'A') ? 0.0 : (float) optional(optional($prod)->tva)->taux;
+                    $baseTva = $montantHt + $tsTotal;
+                    $tvaTotal = round($baseTva * ($tauxTva / 100.0), 2);
+                    $ttcTotal = $baseTva + $tvaTotal;
+
+                    $isBien = $prod ? (bool) $prod->isBien() : false;
+                    $bicTotal = ($isBien && $tauxBic > 0) ? round($ttcTotal * ($tauxBic / 100.0), 2) : 0.0;
+                    $totalTtcLigne = $ttcTotal + $bicTotal;
+
                     return [
                         'produit_id' => $element->produits_id,
-                        'quantite' => $element->quantite,
-                        'prix_unitaire' => $element->prix_unitaire,
+                        'designation' => $element->designation ?: optional($prod)->designation,
+                        'quantite' => $qte,
+                        'prix_unitaire' => $pu,
+                        'montant_ht' => $montantHt,
+                        'type_ts' => $typeTs,
+                        'montant_ts' => $montantTsFixe,
+                        'pourcentage_ts' => $pctTs,
+                        'ts_unit' => $tsUnit,
+                        'ts_total' => $tsTotal,
+                        'groupe_tva' => $groupeTva,
+                        'taux_tva' => $tauxTva,
+                        'tva_total' => $tvaTotal,
+                        'ttc_total' => $ttcTotal,
+                        'is_service' => $prod ? (bool) $prod->isService() : false,
+                        'is_bien' => $isBien,
+                        'bic_total' => $bicTotal,
+                        'total_ttc_ligne' => $totalTtcLigne,
                     ];
                 })->values(),
             ];
@@ -114,9 +176,15 @@ class FactureAvoirController extends Controller
     public function store(StoreFactureAvoirRequest $request)
     {
         $nature = SfeInvoiceType::normalizeNature($request->nature_avoir)
-            ?: SfeInvoiceType::natureFromMotif($request->motif);
+            ?: SfeInvoiceType::natureFromMotif($request->motif)
+            ?: 'RAN';
 
-        $facture_avoir = DB::transaction(function () use ($request, $nature) {
+        $facture_avoir_result = DB::transaction(function () use ($request, $nature) {
+            $factureOrigine = Facture::findOrFail($request->facture_id);
+            if ($factureOrigine->aAvoirTotal()) {
+                throw new \Exception("La facture {$factureOrigine->code} a déjà été intégralement annulée par un avoir précédent.");
+            }
+
             // Générer automatiquement le code de la facture d'avoir (AVR-00001/2026)
             $year = date('Y');
             $lastAvoir = FactureAvoir::whereYear('created_at', $year)
@@ -125,6 +193,25 @@ class FactureAvoirController extends Controller
 
             $nextNumber = ($lastAvoir ? intval(substr($lastAvoir->code, 4, 5)) : 0) + 1;
             $generatedCode = 'AVR-' . str_pad($nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
+
+            // Commentaires DGI pour l'Avoir (Lignes A à H + Mentions légales)
+            $notesData = [];
+            foreach (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as $letter) {
+                $field = 'comment_' . strtolower($letter);
+                if ($request->filled($field)) {
+                    $notesData[$letter] = substr(trim($request->input($field)), 0, 30);
+                }
+            }
+            if ($request->filled('mention_legale')) {
+                $notesData['mention'] = trim($request->input('mention_legale'));
+            }
+            if ($request->filled('notes_libres')) {
+                $notesData['notes_libres'] = trim($request->input('notes_libres'));
+            }
+            $notesJson = !empty($notesData) ? json_encode($notesData, JSON_UNESCAPED_UNICODE) : null;
+
+            $remise1 = $request->filled('remise_1') ? (float) $request->remise_1 : (float) ($factureOrigine->remise_1 ?? 0);
+            $remise2 = $request->filled('remise_2') ? (float) $request->remise_2 : (float) ($factureOrigine->remise_2 ?? 0);
 
             $facture_avoir = FactureAvoir::create([
                 'code'             => $generatedCode,
@@ -135,16 +222,81 @@ class FactureAvoirController extends Controller
                 'contribuables_id' => $request->contribuables_id,
                 'facture_id'       => $request->facture_id,
                 'objet'            => $request->objet,
-                'motif'            => $request->motif,
+                'motif'            => $request->motif ?? $nature,
                 'nature_avoir'     => $nature,
-                'remise_1'         => $request->remise_1 ?? 0,
-                'remise_2'         => $request->remise_2 ?? 0,
+                'remise_1'         => $remise1,
+                'remise_2'         => $remise2,
+                'notes'            => $notesJson,
             ]);
 
-            $this->saveElements($facture_avoir, $request);
+            $this->saveElements($facture_avoir, $request, $nature);
 
-            return $facture_avoir;
+            // Mettre à jour le statut de la facture d'origine selon la nature fiscale réelle de l'avoir
+            if ($nature === 'RAN') {
+                $factureOrigine->update(['statut' => 'Annulée par Avoir']);
+            } elseif ($nature === 'RRR') {
+                $factureOrigine->update(['statut' => 'Remise accordée']);
+            } elseif ($nature === 'RAM') {
+                $factureOrigine->update(['statut' => 'Reprise de biens']);
+            } elseif ($nature === 'COR') {
+                $factureOrigine->update(['statut' => 'Rectifiée par avoir']);
+            } elseif ($factureOrigine->fresh()->aAvoirTotal()) {
+                $factureOrigine->update(['statut' => 'Avoir total appliqué']);
+            } else {
+                $factureOrigine->update(['statut' => 'Avoir partiel']);
+            }
+
+            // Gestion de l'impact Trésorerie & Décaissement si le client a un trop-perçu et souhaite un remboursement immédiat
+            if ($request->boolean('effectuer_remboursement')) {
+                $montantRemb = (float) $request->input('remboursement_montant');
+                if ($montantRemb > 0) {
+                    $modeRemb = $request->input('remboursement_mode', 'Espèces');
+                    $refRemb = $request->input('remboursement_ref') ?: ('Remboursement suite à ' . $facture_avoir->code);
+
+                    \App\Models\Reglement::create([
+                        'code' => \App\Models\Reglement::generateCode(),
+                        'date' => $request->date ?? now()->toDateString(),
+                        'mode' => $modeRemb,
+                        'montant' => -$montantRemb, // Décaissement de trésorerie (montant négatif)
+                        'reference_paiement' => $refRemb,
+                        'observation' => 'Décaissement / Remboursement client consécutif à l\'avoir ' . $facture_avoir->code,
+                        'facture_id' => $factureOrigine->id,
+                        'users_id' => auth()->id(),
+                    ]);
+
+                    \App\Models\AuditLog::enregistrer('CREATE', 'REGLEMENT', "Décaissement de trésorerie de " . number_format($montantRemb, 0, ',', ' ') . " FCFA au client suite à l'avoir {$facture_avoir->code}", $factureOrigine->id);
+                }
+            }
+
+            \App\Models\AuditLog::enregistrer('CREATE', 'AVOIR', "Création de l'avoir fiscal {$facture_avoir->code} (Nature: {$nature})", $facture_avoir->id);
+
+            $actionType = $request->input('action_type');
+            $isAutoSign = (bool) optional(Entete::first())->sfe_automatic_invoice_signing;
+            $certifieDirect = false;
+
+            if ($actionType === 'certifier' || $isAutoSign) {
+                try {
+                    $this->sfeSigner->signAvoir($facture_avoir->fresh());
+                    $certifieDirect = true;
+                } catch (\Throwable $e) {
+                    report($e);
+                    \Log::warning("Certification directe de l'avoir échouée", [
+                        'facture_avoir_id' => $facture_avoir->id,
+                        'message' => $e->getMessage()
+                    ]);
+                    $notesArr = !empty($facture_avoir->notes) ? (json_decode($facture_avoir->notes, true) ?: []) : [];
+                    $notesArr['sfe_error'] = $e->getMessage();
+                    $facture_avoir->update([
+                        'statut' => 'Erreur SFE',
+                        'notes' => json_encode($notesArr, JSON_UNESCAPED_UNICODE)
+                    ]);
+                }
+            }
+
+            return [$facture_avoir, $certifieDirect];
         });
+
+        [$facture_avoir, $certifieDirect] = $facture_avoir_result;
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -152,16 +304,21 @@ class FactureAvoirController extends Controller
                 'facture_avoir' => [
                     'id' => $facture_avoir->id,
                     'code' => $facture_avoir->code,
-                    'statut' => $facture_avoir->statut,
+                    'statut' => $facture_avoir->fresh()->statut,
+                    'is_certified' => $certifieDirect || !empty($facture_avoir->fresh()->dgi_signature),
                 ],
             ]);
         }
 
-        if (function_exists('smilify')) {
-            smilify('success', 'Facture d\'avoir enregistrée avec succès.');
+        if ($certifieDirect) {
+            smilify('success', "Avoir fiscal {$facture_avoir->code} créé et fiscalisé avec succès !");
+        } elseif ($facture_avoir->fresh()->statut === 'Erreur SFE') {
+            smilify('warning', "Avoir {$facture_avoir->code} enregistré, mais la certification a échoué : " . ($facture_avoir->fresh()->sfe_error ?? 'Vérifiez la connexion MCF'));
+        } else {
+            smilify('success', "Avoir fiscal {$facture_avoir->code} enregistré avec succès.");
         }
 
-        return redirect()->route('module_facture_avoir.index');
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -299,6 +456,7 @@ class FactureAvoirController extends Controller
 
         try {
             $this->sfeSigner->signAvoir($facture_avoir->fresh());
+            \App\Models\AuditLog::enregistrer('CERTIFIER', 'AVOIR', "Certification fiscale SFE/MCF de l'avoir {$facture_avoir->code}", $facture_avoir->id);
             if (function_exists('smilify')) {
                 smilify('success', 'Avoir fiscalisé et verrouillé avec succès.');
             }
@@ -317,16 +475,22 @@ class FactureAvoirController extends Controller
     }
 
     /**
-     * Sauvegarder les éléments de la facture d'avoir.
+     * Sauvegarder les éléments de la facture d'avoir et réintégrer le stock si retour de marchandise (RAN).
      */
-    private function saveElements($facture_avoir, $request)
+    private function saveElements($facture_avoir, $request, string $nature = '')
     {
-        $produitIds = array_filter((array) $request->input('produits_id', []));
+        $produitIds = (array) $request->input('produits_id', []);
         $quantites = (array) $request->input('quantite', []);
         $prixUnitaires = (array) $request->input('prix_unitaire', []);
 
         foreach ($produitIds as $index => $produitId) {
+            if (!$produitId) {
+                continue;
+            }
             $qte = (float) ($quantites[$index] ?? 0);
+            if ($qte <= 0) {
+                continue;
+            }
             $prix = (float) ($prixUnitaires[$index] ?? 0);
             $montantTotal = $qte * $prix;
 
@@ -337,6 +501,14 @@ class FactureAvoirController extends Controller
                 'prix_unitaire'    => $prix,
                 'montant_total'    => $montantTotal,
             ]);
+
+            // Retour de marchandise (RAN ou RAM) : Réintégrer le stock physique uniquement s'il s'agit d'un bien
+            if (in_array($nature, ['RAN', 'RAM'], true)) {
+                $produit = Produit::find($produitId);
+                if ($produit && $produit->isBien() && $qte > 0) {
+                    $produit->increment('qte', $qte);
+                }
+            }
         }
     }
 
@@ -351,48 +523,107 @@ class FactureAvoirController extends Controller
             ->get();
         $entete = Entete::first();
 
-        // Mêmes règles de calcul que la facture définitive (cf. FactureController::print).
-        $total_ht   = 0.0;
-        $tva_groups = []; // [taux => ['taux','base','taxe']]
-        $bic_groups = []; // [taux => ['taux','base_ttc','montant']]
+        // Synthèse fiscale stricte identique aux spécifications DGI / SECeF BF ST 1.0
+        $isRrr = strtoupper((string) ($facture_avoir->nature_avoir ?? '')) === 'RRR';
+        $tauxBic = $isRrr ? 0.0 : (float) optional(optional($facture_avoir->Facture)->Bic)->taux;
+
+        $total_ht = 0.0;
+        $total_ts = 0.0;
+        $lignesParGroupe = [];
 
         foreach ($elements as $element) {
-            $quantite  = (float) $element->quantite;
-            $prix      = (float) $element->prix_unitaire;
-            $montantHt = $quantite * $prix;
+            $qte = (float) $element->quantite;
+            $pu = (float) $element->prix_unitaire;
+            $montantLigneHt = $qte * $pu;
+            $total_ht += $montantLigneHt;
 
-            $total_ht += $montantHt;
+            $produit = $element->Produit;
+            $tsUnit = 0.0;
+            if ($produit) {
+                if ($produit->type_ts === 'POURCENTAGE' && (float) ($produit->pourcentage_ts ?? 0) > 0) {
+                    $tsUnit = round($pu * ((float) $produit->pourcentage_ts / 100.0), 2);
+                } elseif (!$isRrr) {
+                    $tsUnit = (float) ($produit->montant_ts ?? 0);
+                }
+            }
+            $tsLigne = $tsUnit * $qte;
+            $total_ts += $tsLigne;
 
-            $tauxTva = (float) optional(optional($element->Produit)->tva)->taux;
-            $keyTva  = (string) $tauxTva;
-            if (!isset($tva_groups[$keyTva])) {
-                $tva_groups[$keyTva] = ['taux' => $tauxTva, 'base' => 0.0, 'taxe' => 0.0];
+            $groupe = strtoupper((string) optional(optional($produit)->tva)->code ?: 'A');
+            $tauxTva = $groupe === 'A' ? 0.0 : (float) optional(optional($produit)->tva)->taux;
+
+            if (!isset($lignesParGroupe[$groupe])) {
+                $lignesParGroupe[$groupe] = [
+                    'groupe' => $groupe,
+                    'taux' => $tauxTva,
+                    'ht_brut' => 0.0,
+                    'ts' => 0.0,
+                ];
+            }
+            $lignesParGroupe[$groupe]['ht_brut'] += $montantLigneHt;
+            $lignesParGroupe[$groupe]['ts'] += $tsLigne;
+        }
+
+        $remise_1 = (float) ($facture_avoir->remise_1 ?? 0);
+        $remise_2 = (float) ($facture_avoir->remise_2 ?? 0);
+        $remise_totale = $remise_1 + $remise_2;
+        $net_commercial = max(0, $total_ht - $remise_totale);
+        $prorata = $total_ht > 0 ? ($net_commercial / $total_ht) : 1.0;
+
+        $tva_groups = [];
+        $total_taxe = 0.0;
+        ksort($lignesParGroupe);
+        foreach ($lignesParGroupe as $grp => $info) {
+            $baseHt = round($info['ht_brut'] * $prorata, 2);
+            $baseTva = round($baseHt + $info['ts'], 2);
+            $montantTva = round($baseTva * ($info['taux'] / 100), 2);
+            $total_taxe += $montantTva;
+
+            $tva_groups[$grp] = [
+                'groupe' => $grp,
+                'taux' => $info['taux'],
+                'base' => $baseHt,
+                'base_tva' => $baseTva,
+                'taxe' => $montantTva,
+                'ts' => $info['ts'],
+            ];
+        }
+
+        $total_ttc = $net_commercial + $total_ts + $total_taxe;
+
+        // BIC (PSVB) : strictement exclu sur les avoirs financiers RRR, appliqué sur biens matériels uniquement
+        $bic_groups = [];
+        $total_bic = 0.0;
+        if ($tauxBic > 0 && !$isRrr) {
+            $base_psvb_biens = 0.0;
+            foreach ($elements as $element) {
+                $produit = $element->Produit;
+                if ($produit && $produit->isBien()) {
+                    $qte = (float) $element->quantite;
+                    $pu = (float) $element->prix_unitaire;
+                    $ligneHt = $qte * $pu * $prorata;
+                    $tsUnit = 0.0;
+                    if ($produit->type_ts === 'POURCENTAGE' && (float) ($produit->pourcentage_ts ?? 0) > 0) {
+                        $tsUnit = round($pu * ((float) $produit->pourcentage_ts / 100.0), 2);
+                    } else {
+                        $tsUnit = (float) ($produit->montant_ts ?? 0);
+                    }
+                    $tsLigne = $tsUnit * $qte;
+                    $tauxTvaLigne = (float) optional(optional($produit)->tva)->taux;
+                    $baseTvaLigne = $ligneHt + $tsLigne;
+                    $tvaLigne = $baseTvaLigne * ($tauxTvaLigne / 100.0);
+                    $base_psvb_biens += ($baseTvaLigne + $tvaLigne);
+                }
+            }
+            if ($base_psvb_biens > 0) {
+                $total_bic = round($base_psvb_biens * ($tauxBic / 100), 2);
+                $bic_groups[] = [
+                    'taux' => $tauxBic,
+                    'base_ttc' => round($base_psvb_biens, 2),
+                    'montant' => $total_bic,
+                ];
             }
         }
-
-        // Récupérer le taux BIC de la facture originale (une seule fois)
-        $tauxBic = (float) optional(optional($facture_avoir->Facture)->Bic)->taux;
-        if ($tauxBic > 0) {
-            $keyBic = (string) $tauxBic;
-            $bic_groups[$keyBic] = ['taux' => $tauxBic, 'base_ttc' => 0.0, 'montant' => 0.0];
-        }
-
-        $remise_1       = (float) ($facture_avoir->remise_1 ?? 0);
-        $remise_2       = (float) ($facture_avoir->remise_2 ?? 0);
-        $net_commercial = max(0, $total_ht - $remise_1 - $remise_2);
-
-        foreach ($tva_groups as $key => $g) {
-            $tva_groups[$key]['base'] = $net_commercial;
-            $tva_groups[$key]['taxe'] = $net_commercial * $g['taux'] / 100;
-        }
-        $total_taxe = array_sum(array_column($tva_groups, 'taxe'));
-        $total_ttc  = $net_commercial + $total_taxe;
-
-        foreach ($bic_groups as $key => $g) {
-            $bic_groups[$key]['base_ttc'] = $total_ttc;
-            $bic_groups[$key]['montant']  = $total_ttc * $g['taux'] / 100;
-        }
-        $total_bic = array_sum(array_column($bic_groups, 'montant'));
 
         $montant_total = $total_ttc + $total_bic;
 

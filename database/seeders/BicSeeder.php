@@ -9,9 +9,7 @@ use Carbon\Carbon;
 class BicSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
-     *
-     * @return void
+     * Catégories officielles PSVB (Prélèvement Spécifique sur les Ventes de Biens) - DGI Burkina Faso
      */
     public function run()
     {
@@ -20,23 +18,23 @@ class BicSeeder extends Seeder
         $bics = [
             [
                 'code'     => 'A',
-                'intitule' => 'PSVBB Exonéré',
-                'taux'     => 0,
+                'intitule' => 'PSVB Droit commun (2%)',
+                'taux'     => 2.0,
             ],
             [
                 'code'     => 'B',
-                'intitule' => 'PSVBB 5%',
-                'taux'     => 5,
+                'intitule' => 'PSVB Dérogation (1%)',
+                'taux'     => 1.0,
             ],
             [
                 'code'     => 'C',
-                'intitule' => 'PSVBB 10%',
-                'taux'     => 10,
+                'intitule' => 'PSVB Dérogation spéciale (0.2%)',
+                'taux'     => 0.2,
             ],
             [
                 'code'     => 'D',
-                'intitule' => 'PSVBB 15%',
-                'taux'     => 15,
+                'intitule' => 'PSVB Réservé / Exonéré (0%)',
+                'taux'     => 0.0,
             ],
         ];
 

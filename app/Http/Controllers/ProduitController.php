@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Produit;
 use App\Models\Tva;
-use App\Models\Bic;
 use App\Models\ElementFacture;
 use App\Models\ElementFactureFournisseur;
 use Illuminate\Http\Request;
@@ -18,7 +17,7 @@ class ProduitController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Produit::with(['tva', 'bic'])->orderBy('created_at', 'desc');
+        $query = Produit::with('tva')->orderBy('created_at', 'desc');
 
         if ($request->filled('famille_produit')) {
             $query->where('famille_produit', $request->famille_produit);
@@ -30,9 +29,8 @@ class ProduitController extends Controller
 
         $collection = $query->paginate(10)->withQueryString();
         $tvas = Tva::all();
-        $bics = Bic::all();
 
-        return view('pages.produits.index', compact('collection', 'tvas', 'bics'));
+        return view('pages.produits.index', compact('collection', 'tvas'));
     }
 
     /**
@@ -56,16 +54,39 @@ class ProduitController extends Controller
         $validatedData = $request->validate([
             'code' => ['required', 'string', 'max:50', 'min:2', 'unique:produits,code'],
             'designation' => ['required', 'string', 'max:255', 'min:2'],
-            'prix_unitaire' => ['nullable', 'numeric', 'min:0'],
+            'prix_unitaire' => ['required', 'numeric', 'min:0'],
             'unite' => ['nullable', 'string', 'max:50'],
             'qte' => ['nullable', 'numeric', 'min:0'],
             'description' => ['nullable', 'string', 'max:500'],
             'tva_id' => ['nullable', 'exists:tvas,id'],
-            'bic_id' => ['nullable', 'exists:bics,id'],
+            'type_ts' => ['nullable', 'in:AUCUN,MONTANT,POURCENTAGE'],
             'montant_ts' => ['nullable', 'numeric', 'min:0'],
+            'pourcentage_ts' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'description_ts' => ['nullable', 'string', 'max:500'],
             'famille_produit' => ['nullable', 'in:LOCBIE,IMPBIE,LOCSER,IMPSER'],
+        ], [
+            'prix_unitaire.required' => "Le prix unitaire de l'article est obligatoire.",
         ]);
+
+        // Prestation de service : aucun stock physique (forcé à 0)
+        if (in_array($validatedData['famille_produit'] ?? '', ['LOCSER', 'IMPSER'])) {
+            $validatedData['qte'] = 0;
+        }
+
+        // Nettoyage cohérent des taxes spécifiques
+        $typeTs = $validatedData['type_ts'] ?? 'AUCUN';
+        if ($typeTs === 'AUCUN' || empty($typeTs)) {
+            $validatedData['type_ts'] = 'AUCUN';
+            $validatedData['montant_ts'] = 0;
+            $validatedData['pourcentage_ts'] = 0;
+            $validatedData['description_ts'] = null;
+        } elseif ($typeTs === 'MONTANT') {
+            $validatedData['type_ts'] = 'MONTANT';
+            $validatedData['pourcentage_ts'] = 0;
+        } elseif ($typeTs === 'POURCENTAGE') {
+            $validatedData['type_ts'] = 'POURCENTAGE';
+            $validatedData['montant_ts'] = 0;
+        }
 
         $produit = Produit::create($validatedData);
         $produit->load('tva');
@@ -97,9 +118,8 @@ class ProduitController extends Controller
      */
     public function show(String $id)
     {
-        $item = Produit::with('tva', 'bic')->findOrFail($id);
+        $item = Produit::with('tva')->findOrFail($id);
         $tvas = Tva::orderBy('code')->get();
-        $bics = Bic::orderBy('code')->get();
 
         // Totaux ventes (factures clients)
         $ventesRow = ElementFacture::where('produits_id', $id)
@@ -123,7 +143,7 @@ class ProduitController extends Controller
             'montant_ht'  => (float) ($achatsRow->montant_ht ?? 0),
         ];
 
-        return view('pages.produits.show', compact('item', 'tvas', 'bics', 'statsVentes', 'statsAchats'));
+        return view('pages.produits.show', compact('item', 'tvas', 'statsVentes', 'statsAchats'));
     }
 
     /**
@@ -149,20 +169,57 @@ class ProduitController extends Controller
         $validatedData = $request->validate([
             'code' => ['required', 'string', 'max:50', 'min:2', 'unique:produits,code,' . $id],
             'designation' => ['required', 'string', 'max:255', 'min:2'],
-            'prix_unitaire' => ['nullable', 'numeric', 'min:0'],
+            'prix_unitaire' => ['required', 'numeric', 'min:0'],
             'unite' => ['nullable', 'string', 'max:50'],
             'qte' => ['nullable', 'numeric', 'min:0'],
             'description' => ['nullable', 'string', 'max:500'],
             'tva_id' => ['nullable', 'exists:tvas,id'],
-            'bic_id' => ['nullable', 'exists:bics,id'],
+            'type_ts' => ['nullable', 'in:AUCUN,MONTANT,POURCENTAGE'],
             'montant_ts' => ['nullable', 'numeric', 'min:0'],
+            'pourcentage_ts' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'description_ts' => ['nullable', 'string', 'max:500'],
             'famille_produit' => ['nullable', 'in:LOCBIE,IMPBIE,LOCSER,IMPSER'],
+        ], [
+            'prix_unitaire.required' => "Le prix unitaire de l'article est obligatoire.",
         ]);
+
+        // Prestation de service : aucun stock physique (forcé à 0)
+        if (in_array($validatedData['famille_produit'] ?? '', ['LOCSER', 'IMPSER'])) {
+            $validatedData['qte'] = 0;
+        }
+
+        // Nettoyage cohérent des taxes spécifiques
+        $typeTs = $validatedData['type_ts'] ?? 'AUCUN';
+        if ($typeTs === 'AUCUN' || empty($typeTs)) {
+            $validatedData['type_ts'] = 'AUCUN';
+            $validatedData['montant_ts'] = 0;
+            $validatedData['pourcentage_ts'] = 0;
+            $validatedData['description_ts'] = null;
+        } elseif ($typeTs === 'MONTANT') {
+            $validatedData['type_ts'] = 'MONTANT';
+            $validatedData['pourcentage_ts'] = 0;
+        } elseif ($typeTs === 'POURCENTAGE') {
+            $validatedData['type_ts'] = 'POURCENTAGE';
+            $validatedData['montant_ts'] = 0;
+        }
 
         Produit::whereId($id)->update($validatedData);
 
         smilify('success', 'Produit modifié avec succès!');
+        return redirect()->back();
+    }
+
+    /**
+     * Activer ou désactiver un produit du catalogue (sans le supprimer).
+     */
+    public function toggleStatus($id)
+    {
+        $produit = Produit::findOrFail($id);
+        $produit->is_active = !$produit->is_active;
+        $produit->save();
+
+        $etat = $produit->is_active ? 'activé (visible dans la boutique)' : 'désactivé (masqué des ventes)';
+        smilify('success', "Le produit {$produit->designation} a été {$etat}.");
         return redirect()->back();
     }
 
@@ -175,9 +232,9 @@ class ProduitController extends Controller
     public function destroy($id)
     {
         $produit = Produit::findOrFail($id);
-        $produit->delete();
+        $produit->update(['is_active' => false]);
 
-        smilify('success', 'Produit supprimé avec succès!');
+        smilify('success', "L'article {$produit->designation} a été désactivé du catalogue avec succès.");
         return redirect()->route('module_produit.index');
     }
 }

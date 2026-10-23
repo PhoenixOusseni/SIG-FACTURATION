@@ -19,10 +19,11 @@ class StockService
         ?int $refId = null,
         string $note = ''
     ): void {
-        if (!$serviceId || $quantite <= 0) return;
+        $produit = Produit::find($produitId);
+        if (!$produit || $produit->isService() || !$serviceId || $quantite <= 0) return;
 
         static::ajusterStock($produitId, $serviceId, $quantite);
-        Produit::where('id', $produitId)->increment('qte', $quantite);
+        $produit->increment('qte', $quantite);
         static::logMouvement($produitId, $serviceId, 'entree', $quantite, $refType, $refId, $note);
     }
 
@@ -37,10 +38,11 @@ class StockService
         ?int $refId = null,
         string $note = ''
     ): void {
-        if (!$serviceId || $quantite <= 0) return;
+        $produit = Produit::find($produitId);
+        if (!$produit || $produit->isService() || !$serviceId || $quantite <= 0) return;
 
         static::ajusterStock($produitId, $serviceId, -$quantite);
-        Produit::where('id', $produitId)->decrement('qte', $quantite);
+        $produit->decrement('qte', $quantite);
         static::logMouvement($produitId, $serviceId, 'sortie', $quantite, $refType, $refId, $note);
     }
 

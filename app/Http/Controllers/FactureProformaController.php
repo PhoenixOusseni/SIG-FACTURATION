@@ -67,7 +67,7 @@ class FactureProformaController extends Controller
         foreach ($produitIds as $i => $produitId) {
             $qte     = (float) ($quantites[$i] ?? 0);
             $produit = Produit::find($produitId);
-            if ($produit && (float) ($produit->qte ?? 0) < $qte) {
+            if ($produit && $produit->isBien() && (float) ($produit->qte ?? 0) < $qte) {
                 $dispo = number_format((float) ($produit->qte ?? 0), 2, ',', ' ');
                 $stockWarnings[] = "« {$produit->designation} » — dispo : {$dispo} | demandé : {$qte}";
             }
@@ -106,7 +106,7 @@ class FactureProformaController extends Controller
             smilify('success', 'Facture proforma enregistrée avec succès.');
         }
 
-        return redirect()->route('module_facture_proforma.index');
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -189,7 +189,7 @@ class FactureProformaController extends Controller
             smilify('success', 'Facture proforma supprimée avec succès.');
         }
 
-        return redirect()->route('module_facture_proforma.index');
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -363,5 +363,104 @@ class FactureProformaController extends Controller
             'transport_qte', 'transport_prix',
             'total_ttc', 'net_a_payer'
         ));
+    }
+
+    /**
+     * Convertit directement une facture proforma en facture de vente définitive.
+     */
+    public function convertirEnFacture($id)
+    {
+        $proforma = FactureProforma::with('ElementFactureProformas')->findOrFail($id);
+
+        try {
+            DB::beginTransaction();
+
+            $year = date('Y');
+            $lastFacture = \App\Models\Facture::whereYear('created_at', $year)
+                ->orderBy('id', 'desc')
+                ->first();
+
+            $nextNumber = ($lastFacture ? intval(substr($lastFacture->code, 4, 5)) : 0) + 1;
+            $generatedCode = 'FAC-' . str_pad($nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
+
+            $typeFV = \App\Models\Typefacture::where('code', 'FV')->first();
+            $modeEsp = \App\Models\ModePaie::where('code', 'ESP')->first();
+
+            $facture = \App\Models\Facture::create([
+                'code'                 => $generatedCode,
+                'reference'            => $proforma->code,
+                'date'                 => now()->format('Y-m-d'),
+                'statut'               => 'Brouillon',
+                'user_id'              => auth()->id(),
+                'contribuable_id'     => $proforma->contribuables_id,
+                'typefacture_id'       => $typeFV ? $typeFV->id : null,
+                'modepaie_id'          => $modeEsp ? $modeEsp->id : null,
+                'remise_1'             => $proforma->remise_1 ?? 0,
+                'remise_2'             => $proforma->remise_2 ?? 0,
+                'facture_proforma_id'  => $proforma->id,
+            ]);
+
+            foreach ($proforma->ElementFactureProformas as $item) {
+                \App\Models\ElementFacture::create([
+                    'facture_id'    => $facture->id,
+                    'produits_id'   => $item->produits_id,
+                    'designation'   => $item->designation,
+                    'quantite'      => $item->quantite,
+                    'prix_unitaire' => $item->prix_unitaire,
+                    'montant_total' => $item->quantite * $item->prix_unitaire,
+                ]);
+
+                // Décrémenter stock si bien physique
+                if ($item->produits_id) {
+                    $prod = Produit::find($item->produits_id);
+                    if ($prod && $prod->isBien()) {
+                        $prod->decrement('qte', (float) $item->quantite);
+                    }
+                }
+            }
+
+            $proforma->update(['statut' => 'transformée']);
+            DB::commit();
+
+            \App\Models\AuditLog::enregistrer('CONVERT', 'PROFORMA', "Conversion de la proforma {$proforma->code} en facture {$facture->code}", $facture->id);
+
+            smilify('success', "Proforma {$proforma->code} convertie en facture de vente {$facture->code} avec succès !");
+            return redirect()->route('module_ordre_facture.index');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+            smilify('error', "Échec de la conversion : " . $e->getMessage());
+            return redirect()->back();
+        }
+    }
+
+    /**
+     * Retourner les données complètes d'une proforma en JSON pour pré-remplir le formulaire de facturation.
+     */
+    public function getJson($id)
+    {
+        $proforma = FactureProforma::with(['ElementFactureProformas.Produit', 'Contribuable'])->findOrFail($id);
+
+        return response()->json([
+            'id' => $proforma->id,
+            'code' => $proforma->code,
+            'date' => optional($proforma->date)->format('Y-m-d') ?? date('Y-m-d'),
+            'contribuable_id' => $proforma->contribuables_id,
+            'client_nom' => optional($proforma->Contribuable)->assujeti,
+            'reference' => 'Devis ' . $proforma->code,
+            'remise_1' => (float) ($proforma->remise_1 ?? 0),
+            'remise_2' => (float) ($proforma->remise_2 ?? 0),
+            'lignes' => $proforma->ElementFactureProformas->map(function ($el) {
+                return [
+                    'produit_id' => $el->produits_id,
+                    'designation' => $el->designation,
+                    'prix_unitaire' => (float) $el->prix_unitaire,
+                    'quantite' => (float) $el->quantite,
+                    'montant' => (float) ($el->quantite * $el->prix_unitaire),
+                    'is_service' => optional($el->Produit)->isService() ?? false,
+                    'stock' => (float) optional($el->Produit)->qte,
+                ];
+            })->values(),
+        ]);
     }
 }

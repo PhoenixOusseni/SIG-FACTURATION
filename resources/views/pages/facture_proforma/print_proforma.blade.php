@@ -1,678 +1,697 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
     <meta charset="UTF-8">
-    <title>Facture proforma {{ $facture->code }}</title>
+    <title>Devis Proforma {{ $facture->code }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
         @page {
-            size: A4;
-            margin: 12mm;
+            size: A4 portrait;
+            margin: 8mm 10mm 24mm 10mm;
         }
-
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
-
         body {
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 10px;
-            color: #222;
-            line-height: 1.35;
-            min-height: 100vh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 9.5px;
+            color: #0f172a;
+            background: #fff;
+            line-height: 1.4;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* Toolbar écran */
+        .toolbar {
+            background: #f8fafc;
+            padding: 10px 16px;
+            margin: -8mm -10mm 15px -10mm;
+            border-bottom: 1px solid #e2e8f0;
             display: flex;
-            flex-direction: column;
-        }
-
-        /* ============ HEADER ============ */
-        .header {
-            display: table;
-            width: 100%;
-            border-bottom: 6px solid #1d3f7f;
-            padding-bottom: 8px;
-            margin-bottom: 8px;
-        }
-
-        .header .left,
-        .header .right {
-            display: table-cell;
-            vertical-align: top;
-        }
-
-        .header .left {
-            width: 58%;
-        }
-
-        .header .right {
-            width: 42%;
-            text-align: right;
-        }
-
-        .company-name {
-            font-size: 15px;
-            font-weight: 700;
-            color: #1d3f7f;
-        }
-
-        .company-meta {
-            font-size: 9px;
-            color: #444;
-            margin-top: 3px;
-            line-height: 1.65;
-        }
-
-        .company-meta b {
-            color: #1a2942;
-        }
-
-        .company-meta .sep {
-            color: #c3c9d1;
-        }
-
-        .doc-title {
-            font-size: 18px;
-            font-weight: 800;
-            color: #1d3f7f;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .doc-meta {
-            font-size: 9.5px;
-            margin-top: 3px;
-            color: #444;
-        }
-
-        .badge {
-            display: inline-block;
-            font-size: 8px;
-            font-weight: 700;
-            padding: 2px 9px;
-            border-radius: 10px;
-            margin-top: 4px;
-            letter-spacing: .3px;
-        }
-
-        .badge-info {
-            background: #fff6e6;
-            color: #a15c00;
-            border: 1px solid #e0a83a;
-        }
-
-        /* ============ INFOS CLIENT ============ */
-        .info-row {
-            display: table;
-            width: 100%;
-            margin-bottom: 9px;
-            font-size: 9.5px;
-            border-top: 1px solid #e3e7ee;
-            border-bottom: 1px solid #e3e7ee;
-            padding: 7px 0;
-        }
-
-        .info-row .col {
-            display: table-cell;
-            width: 50%;
-            vertical-align: top;
-            padding-right: 12px;
-        }
-
-        .info-row .col+.col {
-            padding-right: 0;
-            padding-left: 12px;
-            border-left: 1px solid #e3e7ee;
-        }
-
-        .info-row .lbl {
-            text-transform: uppercase;
-            font-size: 8px;
-            color: #888;
-            font-weight: 700;
-            letter-spacing: .5px;
-            margin-bottom: 3px;
-        }
-
-        .info-row .name {
-            font-weight: 700;
-            font-size: 11.5px;
-            color: #1d3f7f;
-            margin-bottom: 2px;
-        }
-
-        .info-row .lines {
-            color: #4a5568;
-            line-height: 1.6;
-        }
-
-        .info-row .lines b {
-            color: #1a2942;
-        }
-
-        /* ============ TABLEAU ARTICLES ============ */
-        table.items {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 8px;
-        }
-
-        table.items thead th {
-            background: #1d3f7f;
-            color: #fff;
-            font-size: 8.5px;
-            text-transform: uppercase;
-            letter-spacing: .3px;
-            padding: 6px 6px;
-            text-align: left;
-        }
-
-        table.items thead th.r {
-            text-align: right;
-        }
-
-        table.items thead th.c {
-            text-align: center;
-        }
-
-        table.items tbody td {
-            padding: 4.5px 6px;
-            font-size: 9.5px;
-            border-bottom: 1px solid #e7eaee;
-            vertical-align: middle;
-        }
-
-        table.items tbody td.r {
-            text-align: right;
-        }
-
-        table.items tbody td.c {
-            text-align: center;
-        }
-
-        table.items tbody tr:nth-child(even) td {
-            background: #fafbfd;
-        }
-
-        table.items tbody .ref-cell {
-            font-weight: 600;
-            color: #1d3f7f;
-            font-size: 9px;
-        }
-
-        table.items tbody .amount-cell {
-            font-weight: 700;
-            color: #1a2942;
-            white-space: nowrap;
-        }
-
-        .tag {
-            display: inline-block;
-            font-size: 8px;
-            font-weight: 700;
-            padding: 1px 6px;
-            border-radius: 8px;
-            background: #eef2f8;
-            color: #1d3f7f;
-        }
-
-        .tag-muted {
-            background: #f4f4f4;
-            color: #9aa3ab;
-        }
-
-        /* ============ TOTAUX ============ */
-        .totals-wrap {
-            display: table;
-            width: 100%;
-            margin-top: 4px;
-        }
-
-        .totals-wrap .left,
-        .totals-wrap .right {
-            display: table-cell;
-            vertical-align: top;
-        }
-
-        .totals-wrap .left {
-            width: 52%;
-            padding-right: 14px;
-            font-size: 8.8px;
-            color: #444;
-        }
-
-        .totals-wrap .right {
-            width: 48%;
-        }
-
-        .tax-group-title {
-            font-size: 8px;
-            text-transform: uppercase;
-            letter-spacing: .8px;
-            font-weight: 700;
-            color: #6c7a89;
-            margin: 6px 0 3px;
-        }
-
-        .tax-group-title:first-child {
-            margin-top: 0;
-        }
-
-        .tax-line {
-            display: table;
-            width: 100%;
-            padding: 1.5px 0;
-        }
-
-        .tax-line .l,
-        .tax-line .v {
-            display: table-cell;
-        }
-
-        .tax-line .v {
-            text-align: right;
-            font-weight: 600;
-            color: #1a2942;
-        }
-
-        table.summary {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 9.5px;
-        }
-
-        table.summary td {
-            padding: 3.5px 8px;
-            border-bottom: 1px solid #eee;
-        }
-
-        table.summary td.r {
-            text-align: right;
-            font-weight: 600;
-            color: #1a2942;
-        }
-
-        table.summary tr.subtotal td {
-            background: #f7f9fc;
-            font-weight: 700;
-        }
-
-        table.summary tr.total td {
-            font-weight: 800;
-            font-size: 12px;
-            background: #1d3f7f;
-            color: #fff;
-            border: none;
-            padding: 6px 8px;
-        }
-
-        /* ============ DIVERS ============ */
-        .amount-words {
-            margin-top: 10px;
-            font-size: 9.5px;
-            font-style: italic;
-            color: #1a2942;
-            border-top: 1px dashed #ccc;
-            padding-top: 7px;
-        }
-
-        .sign {
-            margin-top: 20px;
-            display: table;
-            width: 100%;
-        }
-
-        .sign .blank {
-            display: table-cell;
-            width: 58%;
-        }
-
-        .sign .box {
-            display: table-cell;
-            width: 42%;
-            text-align: center;
-            font-size: 9px;
-        }
-
-        .sign .box .role {
-            text-transform: uppercase;
-            letter-spacing: .5px;
-            font-weight: 700;
-            color: #1d3f7f;
-        }
-
-        .sign .box .line {
-            border-top: 1px solid #333;
-            margin-top: 38px;
-            padding-top: 4px;
-            font-weight: 700;
-            color: #1a2942;
-        }
-
-        .footer {
-            margin-top: auto;
-            padding-top: 16px;
-            border-top: 4px solid #1d3f7f;
-            font-size: 8px;
-            color: #777;
-            text-align: center;
-            line-height: 1.6;
-        }
-
-        .footer .d-flex {
-            display: flex;
+            justify-content: space-between;
             align-items: center;
         }
-
-        .footer .justify-content-between {
-            justify-content: space-between;
-        }
-
-        /* ============ TOOLBAR (écran uniquement) ============ */
-        .toolbar {
-            background: #f8f9fa;
-            padding: 10px 16px;
-            margin: -12mm -12mm 14px -12mm;
-            border-bottom: 1px solid #dee2e6;
-            text-align: right;
-        }
-
         .btn {
-            border: none;
-            padding: 7px 16px;
-            border-radius: 6px;
+            padding: 6px 14px;
             font-size: 11px;
             font-weight: 600;
+            border-radius: 6px;
             cursor: pointer;
             text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary { background: #0f172a; color: #fff; border: 1px solid #0f172a; }
+        .btn-back { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
+
+        .invoice-wrapper {
+            width: 100%;
+        }
+
+        /* 1. Header Corporate Exécutif */
+        .executive-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2.5px solid #0f172a;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+            gap: 20px;
+        }
+        .company-brand {
+            flex: 1;
+        }
+        .company-name {
+            font-size: 17px;
+            font-weight: 800;
+            color: #0f172a;
+            text-transform: uppercase;
+            letter-spacing: -0.3px;
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+        .company-meta {
+            font-size: 9px;
+            color: #475569;
+            line-height: 1.5;
+        }
+        .company-meta strong {
+            color: #0f172a;
+        }
+
+        .document-panel {
+            text-align: right;
+            min-width: 260px;
+        }
+        .doc-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #0f172a;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .doc-number-badge {
             display: inline-block;
-            margin-left: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: #0f172a;
+            background: #f1f5f9;
+            border: 1.5px solid #cbd5e1;
+            padding: 3px 10px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+        .doc-meta-date {
+            font-size: 9.5px;
+            color: #475569;
+            margin-bottom: 5px;
+        }
+        .tax-mode-badge {
+            display: inline-block;
+            font-size: 8.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            padding: 2.5px 8px;
+            border-radius: 4px;
+        }
+        .badge-ttc {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+        .badge-ht {
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
         }
 
-        .btn-print {
-            background: #1d3f7f;
+        /* 2. Cartes d'informations */
+        .info-cards-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .info-card {
+            flex: 1;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            background: #fafbfd;
+        }
+        .info-card-header {
+            font-size: 8.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 3px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .client-name-bold {
+            font-size: 12px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 3px;
+        }
+        .card-line {
+            font-size: 9px;
+            color: #334155;
+            line-height: 1.45;
+        }
+        .card-line strong {
+            color: #0f172a;
+        }
+
+        /* 3. Tableau des Articles */
+        table.invoice-items {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.5px solid #cbd5e1;
+            margin-bottom: 12px;
+            font-size: 9px;
+        }
+        table.invoice-items thead th {
+            background: #0f172a;
             color: #fff;
+            font-size: 8.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            padding: 6px 8px;
+            border-right: 1px solid #334155;
+        }
+        table.invoice-items thead th:last-child {
+            border-right: none;
+        }
+        table.invoice-items tbody td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+        table.invoice-items tbody tr:nth-child(even) td {
+            background: #f8fafc;
+        }
+        table.invoice-items tbody tr:last-child td {
+            border-bottom: none;
+        }
+        table.invoice-items tbody td:last-child {
+            border-right: none;
         }
 
-        .btn-back {
+        .text-center { text-align: center; }
+        .text-end { text-align: right; }
+        .text-start { text-align: left; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .fw-bold { font-weight: 700; }
+
+        /* 4. Bloc Dual des Totaux */
+        .totals-section {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .taxes-block {
+            width: 50%;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .taxes-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8.8px;
+        }
+        .taxes-table th {
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+            padding: 5px 8px;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .taxes-table td {
+            padding: 4px 8px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .taxes-table tfoot td {
+            background: #f8fafc;
+            font-weight: 700;
+            border-top: 1px solid #cbd5e1;
+        }
+
+        .finance-block {
+            width: 50%;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 6px;
+            overflow: hidden;
             background: #fff;
-            color: #1a2942;
-            border: 1px solid #d5dbdf;
+        }
+        .finance-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9px;
+        }
+        .finance-table td {
+            padding: 4.5px 10px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .finance-table tr.highlight-row td {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+        .finance-table tr.grand-total-row td {
+            background: #0f172a;
+            color: #fff;
+            padding: 8px 10px;
+            font-size: 12px;
+            font-weight: 800;
+            border-bottom: none;
+        }
+        .finance-table tr.grand-total-row .font-mono {
+            color: #38bdf8;
+        }
+
+        /* 5. Mini-tableau structuré : Mentions et conditions */
+        .secef-mentions-card {
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            background: #fafbfd;
+        }
+        .secef-mentions-header {
+            background: #f1f5f9;
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #0f172a;
+            padding: 4px 10px;
+            border-bottom: 1px solid #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .secef-dot {
+            width: 6px;
+            height: 6px;
+            background: #0284c7;
+            border-radius: 50%;
+        }
+        .secef-mentions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8.5px;
+        }
+        .secef-mentions-table td {
+            padding: 3.5px 10px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: top;
+        }
+        .secef-mentions-table tr:last-child td {
+            border-bottom: none;
+        }
+        .secef-lbl {
+            width: 35%;
+            font-weight: 700;
+            color: #475569;
+        }
+        .secef-val {
+            width: 65%;
+            color: #0f172a;
+        }
+
+        /* 6. Montant en toutes lettres */
+        .amount-in-words {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            padding: 6px 12px;
+            font-size: 9.5px;
+            margin-bottom: 12px;
+        }
+        .amount-in-words span {
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #0f172a;
+        }
+
+        /* 7. Signatures */
+        .bottom-blocks {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 12px;
+        }
+        .signature-box {
+            width: 280px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 8px 12px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 85px;
+            text-align: center;
+        }
+        .signature-title {
+            font-size: 8.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #0f172a;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 4px;
+        }
+        .signature-hint {
+            font-size: 7.5px;
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        /* 8. Pied de page bancaire & légal FIXE */
+        .invoice-footer-fixed {
+            border-top: 1.5px solid #0f172a;
+            padding-top: 6px;
+            font-size: 7.8px;
+            color: #475569;
+            text-align: center;
+            line-height: 1.45;
+            background: #fff;
+        }
+        .footer-row {
+            margin-bottom: 2px;
+        }
+        .footer-row strong {
+            color: #0f172a;
         }
 
         @media print {
-            .toolbar {
-                display: none !important;
-            }
-
-            * {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
+            .toolbar { display: none !important; }
+            body { padding: 0; }
+            .invoice-footer-fixed {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
             }
         }
     </style>
 </head>
+<body>
 
-<body onload="window.print();">
-
+    @if(!request()->has('iframe'))
+    <!-- Barre d'outils écran -->
     <div class="toolbar">
-        <a class="btn btn-back" href="{{ url('module_facture_proforma/' . $facture->id) }}">← Retour</a>
-        <button class="btn btn-print" onclick="window.print()">🖨 Imprimer</button>
-    </div>
-
-    {{-- ============ EN-TÊTE ============ --}}
-    <div class="header">
-        <div class="left">
-            <div class="company-name">{{ $entete->denomination ?? config('app.name') }}</div>
-            <div class="company-meta">
-                @if (!empty($entete->activite))
-                    {{ $entete->activite }}<br>
-                @endif
-
-                @if (!empty($entete->postale))
-                    <b>Adresse :</b> {{ $entete->postale }}
-                @endif
-                @if (!empty($entete->telephone))
-                    <span class="sep">·</span> <b>Tél :</b> {{ $entete->telephone }}
-                @endif
-                @if (!empty($entete->email))
-                    <span class="sep">·</span> <b>Email :</b> {{ $entete->email }}
-                @endif
-                <br>
-
-                @if (!empty($entete->ifu))
-                    <b>IFU :</b> {{ $entete->ifu }}
-                @endif
-                @if (!empty($entete->rccm))
-                    <span class="sep">·</span> <b>RCCM :</b> {{ $entete->rccm }}
-                @endif
-                @if (!empty($entete->identifiant_sfe))
-                    <span class="sep">·</span> <b>ISF :</b> {{ $entete->identifiant_sfe }}
-                @endif
-                @if (!empty($entete->ifu) || !empty($entete->rccm) || !empty($entete->identifiant_sfe))
-                    <br>
-                @endif
-
-                @if (!empty($entete->regime_fiscal))
-                    <b>Régime fiscal :</b> {{ $entete->regime_fiscal }}
-                @endif
-                @if (!empty($entete->division_fiscal))
-                    <span class="sep">·</span> <b>Division fiscale :</b> {{ $entete->division_fiscal }}
-                @endif
-                @if (!empty($entete->regime_fiscal) || !empty($entete->division_fiscal))
-                    <br>
-                @endif
-
-                @if (!empty($entete->comptes_bancaires))
-                    <b>Compte bancaire :</b> {{ $entete->comptes_bancaires }}
-                @endif
-            </div>
+        <div>
+            <a href="{{ route('module_facture_proforma.show', $facture->id) }}" class="btn btn-back">← Retour Proforma</a>
         </div>
-        <div class="right">
-            <div class="doc-title">Facture proforma</div>
-            <div class="doc-meta">
-                N° <b>{{ $facture->code }}</b> &nbsp;·&nbsp;
-                {{ \Carbon\Carbon::parse($facture->date)->format('d/m/Y') }}
-            </div>
-            <div class="doc-meta">
-                Valable jusqu'au <b>{{ \Carbon\Carbon::parse($facture->date)->addDays(30)->format('d/m/Y') }}</b>
-            </div>
-            <div class="badge badge-info">Document non contractuel — non certifié</div>
+        <div>
+            <button onclick="window.print()" class="btn btn-primary">🖨 Imprimer Devis Proforma</button>
         </div>
     </div>
+    @endif
 
-    {{-- ============ CLIENT + INFOS FISCALES ============ --}}
-    <div class="info-row">
-        <div class="col">
-            <div class="lbl">Adressée à</div>
-            <div class="name">{{ optional($facture->Contribuable)->assujeti }}</div>
-            <div class="lines">
-                @if (optional($facture->Contribuable)->telephone)
-                    <b>Tél :</b> {{ $facture->Contribuable->telephone }}<br>
-                @endif
-                @if (optional($facture->Contribuable)->ifu)
-                    <b>IFU :</b> {{ $facture->Contribuable->ifu }}<br>
-                @endif
-                @if (optional($facture->Contribuable)->rccm)
-                    <b>RCCM :</b> {{ $facture->Contribuable->rccm }}
-                @endif
-            </div>
-        </div>
-        <div class="col">
-            <div class="lbl">Référence</div>
-            <div class="lines">
-                <b>Type client :</b> {{ $facture->Contribuable->Categorie->code ?? '—' }} -
-                {{ $facture->Contribuable->Categorie->libelle ?? '—' }}<br>
-                <b>Référence :</b> {{ $facture->reference ?: '—' }}<br>
-                @if (optional($facture->Contribuable)->regime_fiscal)
-                    <b>Régime fiscal :</b> {{ $facture->Contribuable->regime_fiscal }}
-                @endif
-            </div>
-        </div>
-    </div>
+    @php
+        $remise_totale = (float)($remise_1 ?? 0) + (float)($remise_2 ?? 0);
+        $isHtMode = ($total_taxe == 0);
+    @endphp
 
-    <div class="info-row">
-        <b>Objet : </b> <span>{{ $facture->objet ?? 'N/A' }}</span><br>
-    </div>
-
-    {{-- ============ ARTICLES ============ --}}
-    <table class="items">
-        <thead>
-            <tr>
-                <th style="width:7%;">Réf.</th>
-                <th style="width:24%;">Désignation</th>
-                <th class="c" style="width:10%;">Type</th>
-                <th class="r" style="width:6%;">Qté</th>
-                <th class="r" style="width:12%;">P.U.</th>
-                <th class="r" style="width:16%;">Montant HT</th>
-                <th class="c" style="width:13%;">TVA</th>
-                <th class="c" style="width:12%;">PSVBB</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach ($elements as $element)
-                @php $code = strtoupper((string) optional($element->Produit)->code); @endphp
-                @if ($code === 'TRANS')
-                    @continue
-                @endif
-                @php
-                    $quantite = (float) $element->quantite;
-                    $prix = (float) $element->prix_unitaire;
-                    $montantHt = $quantite * $prix;
-                    $taux = (float) optional(optional($element->Produit)->tva)->taux;
-                    $tauxBic = 0; // BIC non applicable aux factures proforma
-                    $typeProduit = optional($element->Produit)->famille_produit ?? '—';
-                @endphp
-                <tr>
-                    <td class="ref-cell">{{ optional($element->Produit)->code }}</td>
-                    <td>{{ $element->designation ?? optional($element->Produit)->designation }}</td>
-                    <td class="c">{{ $typeProduit }}</td>
-                    <td class="r">{{ number_format($quantite, 0, ',', ' ') }}</td>
-                    <td class="r">{{ number_format($prix, 0, ',', ' ') }}</td>
-                    <td class="r amount-cell">{{ number_format($montantHt, 0, ',', ' ') }}</td>
-                    <td class="c">
-                        @if ($taux)
-                            <span class="tag">{{ rtrim(rtrim(number_format($taux, 2, '.', ''), '0'), '.') }}%</span>
-                        @else
-                            <span class="tag tag-muted">—</span>
-                        @endif
-                    </td>
-                    <td class="c">
-                        @if ($tauxBic)
-                            <span
-                                class="tag">{{ rtrim(rtrim(number_format($tauxBic, 2, '.', ''), '0'), '.') }}%</span>
-                        @else
-                            <span class="tag tag-muted">—</span>
-                        @endif
-                    </td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
-
-    {{-- ============ TOTAUX ============ --}}
-    <div class="totals-wrap">
-        <div class="left">
-            <div class="tax-group-title">Récapitulatif TVA</div>
-            @foreach ($tva_groups as $g)
-                <div class="tax-line">
-                    <div class="l">{{ number_format($g['taux'], 2, ',', ' ') }}% — base
-                        {{ number_format($g['base'], 0, ',', ' ') }}</div>
-                    <div class="v">{{ number_format($g['taxe'], 0, ',', ' ') }}</div>
+    <div class="invoice-wrapper">
+        <!-- 1. En-tête Corporate Exécutif -->
+        <header class="executive-header">
+            <div class="company-brand">
+                <div class="company-name">{{ $entete->denomination ?? 'ENTREPRISE' }}</div>
+                <div class="company-meta">
+                    @if(!empty($entete->postale)){{ $entete->postale }}<br>@endif
+                    @if(!empty($entete->telephone))<strong>Tél :</strong> {{ $entete->telephone }} · @endif
+                    @if(!empty($entete->email))<strong>Email :</strong> {{ $entete->email }}<br>@endif
+                    <strong>IFU :</strong> {{ $entete->ifu ?? '—' }} · <strong>RCCM :</strong> {{ $entete->rccm ?? '—' }}
                 </div>
-            @endforeach
+            </div>
 
-            @if (!empty($bic_groups))
-                <div class="tax-group-title">Récapitulatif PSVBB</div>
-                @foreach ($bic_groups as $b)
-                    <div class="tax-line">
-                        <div class="l">{{ number_format($b['taux'], 2, ',', ' ') }}% — base
-                            {{ number_format($b['base_ttc'], 0, ',', ' ') }}</div>
-                        <div class="v">{{ number_format($b['montant'], 0, ',', ' ') }}</div>
+            <div class="document-panel">
+                <div class="doc-title">DEVIS / FACTURE PROFORMA</div>
+                <div class="doc-number-badge">N° {{ $facture->code }}</div>
+                <div class="doc-meta-date">Date : <strong>{{ \Carbon\Carbon::parse($facture->date)->format('d/m/Y') }}</strong></div>
+                <div>
+                    <span class="tax-mode-badge {{ $isHtMode ? 'badge-ht' : 'badge-ttc' }}">
+                        Proposition établie en : <strong>{{ $isHtMode ? 'Hors Taxe (HT)' : 'TTC' }}</strong>
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 2. Section Métadonnées & Client -->
+        <div class="info-cards-row">
+            <div class="info-card">
+                <div class="info-card-header">
+                    <span>Conditions du Devis</span>
+                    <span class="font-mono text-muted">RÉF : {{ $facture->reference ?? $facture->code }}</span>
+                </div>
+                <div class="card-line"><strong>Établi par :</strong> {{ optional($facture->User)->prenom }} {{ optional($facture->User)->nom ?? 'Commercial' }}</div>
+                <div class="card-line"><strong>Validité de l'offre :</strong> 30 jours à compter de la date d'émission</div>
+                @if(!empty($facture->objet))
+                    <div class="card-line"><strong>Objet :</strong> {{ $facture->objet }}</div>
+                @endif
+                @if($facture->estConvertie())
+                    <div class="card-line" style="color: #15803d;">
+                        <strong>Statut :</strong> Convertie en facture définitive
                     </div>
-                @endforeach
-            @endif
+                @endif
+            </div>
+
+            <div class="info-card">
+                <div class="info-card-header">
+                    <span>Destinataire / Client</span>
+                    @if(optional($facture->Contribuable)->ifu)<span class="font-mono">IFU : {{ $facture->Contribuable->ifu }}</span>@endif
+                </div>
+                <div class="client-name-bold">{{ optional($facture->Contribuable)->assujeti ?? 'Client' }}</div>
+                <div class="card-line">
+                    @if(optional($facture->Contribuable)->rccm)<strong>RCCM :</strong> {{ $facture->Contribuable->rccm }} · @endif
+                    @if(optional($facture->Contribuable)->telephone)<strong>Tél :</strong> {{ $facture->Contribuable->telephone }}@endif
+                </div>
+                <div class="card-line">
+                    @if(optional($facture->Contribuable)->regime_fiscal)<strong>Régime :</strong> {{ $facture->Contribuable->regime_fiscal }}@endif
+                </div>
+            </div>
         </div>
-        <div class="right">
-            <table class="summary">
+
+        <!-- 3. Tableau des Articles -->
+        <table class="invoice-items">
+            <thead>
                 <tr>
-                    <td>Total brut HT</td>
-                    <td class="r">{{ number_format($total_ht, 0, ',', ' ') }}</td>
+                    <th style="width: 4%;" class="text-center">#</th>
+                    <th style="width: 50%;">Article / Prestation proposée</th>
+                    <th class="text-center" style="width: 8%;">Qté</th>
+                    <th class="text-end" style="width: 14%;">P.U. {{ $isHtMode ? 'HT' : 'TTC' }}</th>
+                    <th class="text-center" style="width: 10%;">TVA</th>
+                    <th class="text-end" style="width: 14%;">Total {{ $isHtMode ? 'HT' : 'TTC' }}</th>
                 </tr>
-                <tr>
-                    <td>Remises</td>
-                    <td class="r">− {{ number_format($remise_1 + $remise_2, 0, ',', ' ') }}</td>
-                </tr>
-                <tr class="subtotal">
-                    <td>Net commercial</td>
-                    <td class="r">{{ number_format($net_commercial, 0, ',', ' ') }}</td>
-                </tr>
-                <tr>
-                    <td>TVA</td>
-                    <td class="r">{{ number_format($total_taxe, 0, ',', ' ') }}</td>
-                </tr>
-                <tr class="subtotal">
-                    <td>Total TTC</td>
-                    <td class="r">{{ number_format($total_ttc, 0, ',', ' ') }}</td>
-                </tr>
-                @if ($total_bic > 0)
+            </thead>
+            <tbody>
+                @php $lineIdx = 1; @endphp
+                @foreach($elements as $el)
+                    @php
+                        $qte = (float) $el->quantite;
+                        $pu  = (float) $el->prix_unitaire;
+                        $ligneBrut = $qte * $pu;
+                        $tauxTva = (float) optional(optional($el->Produit)->tva)->taux ?? 0;
+                        $desig = $el->designation ?? optional($el->Produit)->designation ?? 'Article';
+                        $codeProd = optional($el->Produit)->code;
+                    @endphp
                     <tr>
-                        <td>PSVBB</td>
-                        <td class="r">{{ number_format($total_bic, 0, ',', ' ') }}</td>
+                        <td class="text-center font-mono text-muted">{{ $lineIdx++ }}</td>
+                        <td>
+                            <div class="fw-bold">{{ $desig }}</div>
+                            @if($codeProd)
+                                <small class="text-muted font-mono" style="font-size: 8px;">Code : {{ $codeProd }}</small>
+                            @endif
+                        </td>
+                        <td class="text-center fw-bold">{{ number_format($qte, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
+                        <td class="text-center font-mono">{{ $tauxTva > 0 ? $tauxTva.'%' : '0% (Exo)' }}</td>
+                        <td class="text-end font-mono fw-bold">{{ number_format($ligneBrut, 0, ',', ' ') }}</td>
                     </tr>
-                @endif
-                @if ($montant_transport > 0)
+                @endforeach
+            </tbody>
+        </table>
+
+        <!-- 4. Bloc Dual des Totaux -->
+        <div class="totals-section">
+            <!-- Gauche: Récapitulatif TVA prévisionnelle -->
+            <div class="taxes-block">
+                <table class="taxes-table">
+                    <thead>
+                        <tr>
+                            <th class="text-start">Taxes Applicables</th>
+                            <th class="text-end">Base HT</th>
+                            <th class="text-center">Taux</th>
+                            <th class="text-end">Montant TVA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($tva_groups as $grp => $info)
+                        <tr>
+                            <td class="fw-bold">TVA ({{ $info['taux'] }}%)</td>
+                            <td class="text-end font-mono">{{ number_format($info['base'], 0, ',', ' ') }}</td>
+                            <td class="text-center">{{ $info['taux'] > 0 ? $info['taux'].'%' : '0%' }}</td>
+                            <td class="text-end font-mono fw-bold">{{ number_format($info['taxe'], 0, ',', ' ') }}</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="text-end">TOTAL TAXES :</td>
+                            <td class="text-end font-mono fw-bold">{{ number_format($total_taxe, 0, ',', ' ') }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div style="padding: 6px 10px; background: #fafbfd; border-top: 1px solid #cbd5e1; font-size: 8.5px;">
+                    <span class="text-muted">Clause de validité :</span> Les prix mentionnés sont fermes sous réserve de disponibilité des stocks.
+                </div>
+            </div>
+
+            <!-- Droite: Synthèse Financière -->
+            <div class="finance-block">
+                <table class="finance-table">
                     <tr>
-                        <td>{{ $transport_label }}</td>
-                        <td class="r">{{ number_format($montant_transport, 0, ',', ' ') }}</td>
+                        <td>Total Brut HT</td>
+                        <td class="text-end font-mono">{{ number_format($total_ht, 0, ',', ' ') }}</td>
                     </tr>
-                @endif
-                <tr class="total">
-                    <td>Net à payer</td>
-                    <td class="r" style="color:#fff;">{{ number_format($net_a_payer, 0, ',', ' ') }}</td>
-                </tr>
+                    @if($remise_totale > 0)
+                    <tr>
+                        <td class="text-danger">Remise commerciale</td>
+                        <td class="text-end font-mono text-danger">- {{ number_format($remise_totale, 0, ',', ' ') }}</td>
+                    </tr>
+                    @endif
+                    <tr class="highlight-row">
+                        <td>Total Net HT</td>
+                        <td class="text-end font-mono fw-bold">{{ number_format($net_commercial, 0, ',', ' ') }}</td>
+                    </tr>
+                    <tr>
+                        <td>Total TVA (estimée)</td>
+                        <td class="text-end font-mono">{{ number_format($total_taxe, 0, ',', ' ') }}</td>
+                    </tr>
+                    @if(!empty($total_bic) && $total_bic > 0)
+                    <tr>
+                        <td>Acompte BIC / PSVB</td>
+                        <td class="text-end font-mono text-warning">{{ number_format($total_bic, 0, ',', ' ') }}</td>
+                    </tr>
+                    @endif
+                    @if(!empty($montant_transport) && $montant_transport > 0)
+                    <tr>
+                        <td>{{ $transport_label ?? 'Transport' }}</td>
+                        <td class="text-end font-mono">{{ number_format($montant_transport, 0, ',', ' ') }}</td>
+                    </tr>
+                    @endif
+                    <tr class="grand-total-row">
+                        <td>{{ $isHtMode ? 'TOTAL ESTIMÉ (HT)' : 'TOTAL ESTIMÉ (TTC)' }}</td>
+                        <td class="text-end font-mono">{{ number_format($net_a_payer, 0, ',', ' ') }} FCFA</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        @php
+            $commentaires = [];
+            if (!empty($facture->notes)) {
+                if (str_starts_with(trim($facture->notes), '{')) {
+                    $rawNotes = json_decode($facture->notes, true) ?: [];
+                    foreach ($rawNotes as $k => $v) {
+                        if (in_array($k, ['mode_prix', 'sfe_error', 'action_type', 'cert_status'])) continue;
+                        if (!empty(trim((string)$v))) {
+                            $commentaires[$k] = trim((string)$v);
+                        }
+                    }
+                } else {
+                    $commentaires['OBS'] = trim($facture->notes);
+                }
+            }
+            $nomsLignes = [
+                'A' => 'Ligne A (Chauffeur / Commande)',
+                'B' => 'Ligne B (Immatriculation / Destination)',
+                'C' => 'Ligne C (Observations)',
+                'D' => 'Ligne D (Conditions de livraison)',
+                'E' => 'Ligne E (Mode de règlement prévisionnel)',
+                'F' => 'Ligne F (Mention commerciale)',
+                'G' => 'Ligne G (Réf. Dossier / Projet)',
+                'H' => 'Ligne H (Référence Contrat)',
+                'OBS' => 'Mentions particulières'
+            ];
+            $hasComments = !empty($commentaires);
+        @endphp
+
+        <!-- 5. Mini-tableau structuré : Mentions et conditions -->
+        @if($hasComments)
+        <div class="secef-mentions-card">
+            <div class="secef-mentions-header">
+                <span class="secef-dot"></span>
+                <span>Conditions spécifiques & Mentions du Devis</span>
+            </div>
+            <table class="secef-mentions-table">
+                <tbody>
+                    @foreach($commentaires as $label => $valeur)
+                        @if($label !== 'mode_prix' && !empty(trim((string)$valeur)))
+                            <tr>
+                                <td class="secef-lbl">{{ is_numeric($label) ? "Ligne $label" : ($nomsLignes[$label] ?? $label) }}</td>
+                                <td class="secef-val">{{ $valeur }}</td>
+                            </tr>
+                        @endif
+                    @endforeach
+                </tbody>
             </table>
         </div>
-    </div>
-
-    {{-- ============ MONTANT EN LETTRES ============ --}}
-    <div class="amount-words">
-        Arrêtée la présente facture proforma à la somme de :
-        <b>{{ ucfirst(conversion((int) round($net_a_payer))) }} francs CFA</b>
-    </div>
-
-    {{-- ============ SIGNATURE ============ --}}
-    @php
-        $signataire = $facture->User;
-        $prenom = $signataire->prenom ?? '';
-        $nom = $signataire->nom ?? '';
-    @endphp
-    <div class="sign" style="margin-top: 28px;">
-        <div class="blank"></div>
-        <div class="box">
-            <div class="role">Operateur</div>
-            <br><br><br><br><br><br><br>
-            <div class="">{{ trim($prenom . ' ' . $nom) ?: '—' }}</div>
-        </div>
-    </div>
-
-    {{-- ============ PIED DE PAGE ============ --}}
-    <div class="footer">
-        <div class="d-flex justify-content-between">
-            <div>
-                @if (!empty($entete->comptes_bancaires))
-                    <p>Compte bancaire : <strong>{{ $entete->comptes_bancaires }}</strong></p>
-                @endif
-            </div>
-            <div>
-                <p><strong>{{ $entete->denomination ?? '' }}</strong></p>
-            </div>
-        </div>
-        @if (!empty($entete->pied_page))
-            <p style="margin-top:4px;">{{ $entete->pied_page }}</p>
         @endif
+
+        <!-- 6. Montant en toutes lettres -->
+        <div class="amount-in-words">
+            Arrêté le présent devis proforma à la somme de :
+            <span>{{ ucfirst(conversion((int) round($net_a_payer))) }} FRANCS CFA {{ $isHtMode ? '(HORS TAXES)' : '(TOUTES TAXES COMPRISES)' }}</span>
+        </div>
+
+        <!-- 7. Signatures -->
+        <div class="bottom-blocks">
+            <div class="signature-box">
+                <div class="signature-title">Pour l'Entreprise (Service Commercial)</div>
+                <div style="flex-grow: 1;"></div>
+                <div class="signature-hint">Signature & Cachet commercial</div>
+            </div>
+        </div>
+
+        <!-- 8. Pied de page bancaire & légal FIXE (sans répétition d'adresse/tél) -->
+        <footer class="invoice-footer-fixed">
+            <div class="footer-row">
+                @if(!empty($entete->comptes_bancaires))
+                    <strong>Coordonnées Bancaires :</strong> {{ $entete->comptes_bancaires }} ·
+                @endif
+                <strong>Régime fiscal :</strong> {{ $entete->regime_fiscal ?? '—' }} · <strong>Centre des Impôts (CDI) :</strong> {{ $entete->division_fiscal ?? '—' }}
+                @if(!empty($entete->infos_cadastrales)) · <strong>Cadastre :</strong> {{ $entete->infos_cadastrales }} @endif
+            </div>
+            <div class="footer-row" style="font-style: italic;">
+                Document proforma émis à titre d'estimation commerciale sans valeur fiscale d'encaissement.
+            </div>
+        </footer>
     </div>
 
 </body>
-
 </html>

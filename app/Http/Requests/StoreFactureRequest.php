@@ -29,6 +29,8 @@ class StoreFactureRequest extends FormRequest
             'prix_unitaire.*' => 'required|numeric|gt:0',
             'designation' => 'nullable|array',
             'designation.*' => 'nullable|string|max:255',
+            'facture_proforma_id' => 'nullable|integer',
+            'mode_prix' => 'nullable|in:HT,TTC',
         ];
     }
 
@@ -53,6 +55,30 @@ class StoreFactureRequest extends FormRequest
         ];
     }
 
+    public function prepareForValidation(): void
+    {
+        $remiseType = $this->input('remise_type', 'POURCENTAGE');
+        $remiseVal = (float) $this->input('remise_valeur', $this->input('remise_1', 0));
+
+        $totalBrutHt = 0.0;
+        $qtes = (array) $this->input('quantite', []);
+        $pus = (array) $this->input('prix_unitaire', []);
+        foreach ($qtes as $i => $q) {
+            $totalBrutHt += ((float) $q) * ((float) ($pus[$i] ?? 0));
+        }
+
+        if ($remiseType === 'POURCENTAGE') {
+            $remiseMontant = round($totalBrutHt * (min(100, max(0, $remiseVal)) / 100), 2);
+        } else {
+            $remiseMontant = round(min($totalBrutHt, max(0, $remiseVal)), 2);
+        }
+
+        $this->merge([
+            'remise_1' => $remiseMontant,
+            'remise_2' => (float) $this->input('remise_2', 0),
+        ]);
+    }
+
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
@@ -64,15 +90,10 @@ class StoreFactureRequest extends FormRequest
                 return;
             }
 
-            $gross = 0.0;
-            foreach ($products as $index => $product) {
-                if ($product !== null && $product !== '') {
-                    $gross += (float) ($quantities[$index] ?? 0) * (float) ($prices[$index] ?? 0);
-                }
-            }
-            $discount = (float) $this->input('remise_1', 0) + (float) $this->input('remise_2', 0);
-            if ($gross > 0 && $discount >= $gross) {
-                $validator->errors()->add('remise_1', 'Le total des remises doit être inférieur au total brut de la facture.');
+            $remiseType = $this->input('remise_type', 'POURCENTAGE');
+            $remiseVal = (float) $this->input('remise_valeur', 0);
+            if ($remiseType === 'POURCENTAGE' && $remiseVal > 100) {
+                $validator->errors()->add('remise_valeur', 'Le taux de remise ne peut pas dépasser 100%.');
             }
         });
     }

@@ -1,10 +1,10 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="{{ asset('cdn.jsdelivr.net/npm/simple-datatables@latest/dist/style.css') }}" rel="stylesheet" />
 <link href="{{ asset('cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css') }}" rel="stylesheet" />
 <link href="{{ asset('asset/css/styles.css') }}" rel="stylesheet" />
 <link href="{{ asset('asset/css/dataTable.min.css') }}" rel="stylesheet" />
-<link href="{{ asset('css/professional-design.css') }}" rel="stylesheet" />
-<link href="{{ asset('css/page-header.css') }}" rel="stylesheet" />
-<link href="{{ asset('css/bootstrap-overrides.css') }}" rel="stylesheet" />
 <link href="{{ asset('css/page-header.css') }}" rel="stylesheet" />
 <link href="{{ asset('css/dark-mode.css') }}" rel="stylesheet" />
 <link href="{{ asset('css/ux-modals.css') }}" rel="stylesheet" />
@@ -15,17 +15,187 @@
 @include('components.professional-styles')
 
 <style type="text/css">
+	/* ── POLICE PROFESSIONNELLE & UNIFORMISATION GLOBALE (Style Hub Facturation) ── */
+	body, .body, html, input, button, select, textarea {
+		font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+		font-weight: 500;
+		color: #1e293b;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+		font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+		font-weight: 700 !important;
+		color: #0f172a;
+		letter-spacing: -0.02em;
+	}
+
+	.font-mono, .badge-mono, .code-ref {
+		font-family: 'JetBrains Mono', monospace !important;
+	}
+
+	/* ── MODALS HARMONISÉS STYLE HUB FACTURATION ── */
+	.modal-content {
+		border: none !important;
+		border-radius: 14px !important;
+		box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22) !important;
+		overflow: hidden;
+	}
+
+	.modal-header {
+		background: #1d3f7f !important;
+		color: #ffffff !important;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+		padding: 1.1rem 1.5rem !important;
+	}
+
+	.modal-header .modal-title,
+	.modal-header h5,
+	.modal-header h4 {
+		color: #ffffff !important;
+		font-weight: 700 !important;
+		font-size: 1.15rem !important;
+		letter-spacing: -0.01em;
+		margin-bottom: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.modal-header .btn-close {
+		filter: invert(1) grayscale(100%) brightness(200%) !important;
+		opacity: 0.85;
+		transition: opacity 0.2s;
+	}
+
+	.modal-header .btn-close:hover {
+		opacity: 1;
+	}
+
+	.modal-body {
+		padding: 1.5rem !important;
+		background: #ffffff;
+	}
+
+	.modal-footer {
+		background-color: #f8fafc !important;
+		border-top: 1px solid #e2e8f0 !important;
+		padding: 0.85rem 1.5rem !important;
+	}
+
+	/* ── CARTES ET LISTES HARMONISÉES STYLE HUB FACTURATION ── */
+	.card {
+		border-radius: 12px !important;
+		border: 1px solid #e2e8f0 !important;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+	}
+
+	.card-header:not(.bg-transparent):not(.bg-primary):not(.header-gradient):not(.bg-danger):not(.bg-success):not(.bg-warning):not(.bg-info):not(.bg-dark) {
+		background: #ffffff !important;
+		border-bottom: 1px solid #e2e8f0 !important;
+		font-weight: 700 !important;
+		color: #1e293b !important;
+	}
+
+	/* ── TABLEAUX - LISTES HARMONISÉES ── */
+	table thead th,
+	.table thead th,
+	.dataTable-table thead th {
+		background: #1d3f7f !important;
+		color: #ffffff !important;
+		font-size: 0.82rem !important;
+		text-transform: uppercase !important;
+		letter-spacing: 0.5px !important;
+		font-weight: 700 !important;
+		border-bottom: 2px solid #152d5c !important;
+		padding: 9px 12px !important;
+		vertical-align: middle !important;
+	}
+
+	table tbody td,
+	.table tbody td,
+	.dataTable-table tbody td {
+		font-size: 0.875rem !important;
+		font-weight: 500 !important;
+		color: #334155 !important;
+		padding: 9px 12px !important;
+		vertical-align: middle !important;
+		border-bottom: 1px solid #f1f5f9 !important;
+	}
+
+	table tbody tr:hover td,
+	.table tbody tr:hover td {
+		background-color: #f8fafc !important;
+	}
+
+	/* ── NEUTRALISATION DE L'ANCIEN MARGIN NÉGATIF mt-n10 ── */
+	.mt-n10 {
+		margin-top: 0 !important;
+	}
+
+	/* ── SUPPRESSION DE L'ANCIEN BANDEAU BLEU LOURD PAGE-HEADER ── */
+	header.page-header:not(.executive-header) {
+		background: transparent !important;
+		box-shadow: none !important;
+		padding: 0 !important;
+		margin-bottom: 0 !important;
+		border-radius: 0 !important;
+	}
+	header.page-header:not(.executive-header)::before,
+	header.page-header:not(.executive-header)::after,
+	header.page-header:not(.executive-header) .page-header-watermark,
+	header.page-header:not(.executive-header) .page-header-pattern {
+		display: none !important;
+	}
+
+	/* ── ÉCRAN LARGE : PLEINE LARGEUR ÉLÉGANTE (ÉVITE LE RÉTRÉCISSEMENT ET LE DÉBORDEMENT) ── */
+	.container-xl, .container-xxl, .container-fluid {
+		max-width: 100% !important;
+		width: 100% !important;
+		padding-left: 1.5rem !important;
+		padding-right: 1.5rem !important;
+	}
+
+	@media (min-width: 1200px) {
+		.container-xl, .container-xxl, .container-lg, .container {
+			max-width: 100% !important;
+			width: 100% !important;
+		}
+	}
+
+	@media (min-width: 1500px) {
+		.container-xl, .container-xxl, .container-lg, .container {
+			max-width: 100% !important;
+			width: 100% !important;
+		}
+	}
+
+	#layoutSidenav_content {
+		width: 100% !important;
+		min-width: 0 !important;
+		overflow-x: hidden !important;
+	}
+
+	.table-responsive {
+		width: 100% !important;
+	}
+
+	.table-responsive > table {
+		width: 100% !important;
+	}
+
 	#datatablesSimple_filter, #datatablesSimple_info, #datatablesSimple_paginate {
 		display: none;
 	}
 </style>
 <script data-search-pseudo-elements="" defer="" src="{{ asset('cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/js/all.min.js') }}" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.28.0/feather.min.js" crossorigin="anonymous"></script>
+<script src="{{ asset('cdnjs.cloudflare.com/ajax/libs/feather-icons/4.28.0/feather.min.js') }}"></script>
 
-<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="{{ asset('js/jquery-3.5.1.js') }}"></script>
 
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js" defer></script>
+<link href="{{ asset('vendor/select2/select2.min.css') }}" rel="stylesheet" />
+<script src="{{ asset('vendor/select2/select2.min.js') }}" defer></script>
 
 {{-- <script>
 	$(document).ready(function() {
@@ -34,8 +204,12 @@
 </script> --}}
 
 <style>
-    .header-gradient {
+    .header-gradient:not(header):not(.page-header) {
         background-color: #1d3f7f;
+    }
+    header.header-gradient,
+    .page-header.header-gradient {
+        background: transparent !important;
     }
     .btn-1 {
         background-color: #1d3f7f;

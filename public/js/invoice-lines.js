@@ -48,8 +48,16 @@
                 map[String(k)] = {
                     code: p.code || '',
                     designation: p.designation || '',
+                    label_fiscal: p.label_fiscal || '',
                     prix_unitaire: parseFloat(p.prix_unitaire) || 0,
                     qte: parseFloat(p.qte) || 0,
+                    is_service: !!p.is_service,
+                    taux_tva: parseFloat(p.taux_tva) || 0,
+                    groupe_tva: p.groupe_tva || 'A',
+                    type_ts: p.type_ts || 'AUCUNE',
+                    montant_ts: parseFloat(p.montant_ts) || 0,
+                    pourcentage_ts: parseFloat(p.pourcentage_ts) || 0,
+                    type_article: p.type_article || '',
                 };
             });
             this.options.products = map;
@@ -57,31 +65,35 @@
 
         formatMontant: function (n) {
             return new Intl.NumberFormat('fr-FR', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(n || 0);
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+            }).format(Math.round(n || 0)) + ' FCFA';
         },
 
         productLabel: function (id, data) {
             data = data || this.options.products[String(id)] || {};
-            const base = ((data.code ? data.code + ' - ' : '') + (data.designation || '')).trim() || ('#' + id);
-            if (this.options.enforceStock) {
-                const stock = parseFloat(data.qte) || 0;
-                return base + ' (Stock: ' + stock + ')';
+            if (data.label_fiscal) {
+                return data.label_fiscal;
             }
-            return base;
+            const code = data.code ? '[' + data.code + '] ' : '';
+            const desig = data.designation || ('#' + id);
+            const stock = !data.is_service ? ' (Stock: ' + (parseFloat(data.qte) || 0) + ')' : '';
+            const grp = data.groupe_tva ? 'Groupe ' + data.groupe_tva + ' (' + (data.taux_tva || 0) + '%)' : 'Exonéré (0%)';
+            const type = data.type_article || (data.is_service ? 'LOCSER' : 'LOCBIE');
+            return code + desig + stock + ' — [' + grp + '] — [' + type + ']';
         },
 
         isOutOfStock: function (id) {
             if (!this.options.enforceStock) return false;
             const data = this.options.products[String(id)];
             if (!data) return false;
+            if (data.is_service) return false; // Prestation de service : STRICTEMENT JAMAIS hors stock
             return (parseFloat(data.qte) || 0) <= 0;
         },
 
         buildOptionsHtml: function (selectedId) {
             const self = this;
-            let html = '<option value="">Sélectionner un produit</option>';
+            let html = '<option value="">-- Sélectionner un article ou prestation --</option>';
             Object.keys(this.options.products).forEach(function (id) {
                 const data = self.options.products[id];
                 const out = self.isOutOfStock(id);
@@ -131,6 +143,9 @@
                 total += self.recalcRow($(this));
             });
             $(this.options.grandTotal).text(this.formatMontant(total));
+            if (typeof window.calculerSyntheseLive === 'function') {
+                window.calculerSyntheseLive();
+            }
             return total;
         },
 
@@ -213,7 +228,7 @@
                     let qty = parseFloat($existing.find(this.options.qtyInput).val()) || 0;
                     qty += this.options.defaultQty || 1;
 
-                    if (this.options.enforceStock && stock > 0 && qty > stock) {
+                    if (this.options.enforceStock && !data.is_service && stock > 0 && qty > stock) {
                         qty = stock;
                         this.showStickyAlert(
                             'Stock insuffisant pour augmenter « ' + (data.designation || id) + ' ». Disponible : ' + stock,
@@ -242,15 +257,32 @@
                 return;
             }
 
-            if (this.options.enforceStock && (parseFloat(data.qte) || 0) <= 0) {
+            if (this.options.enforceStock && !data.is_service && (parseFloat(data.qte) || 0) <= 0) {
                 this.showStickyAlert('Produit hors stock : ' + (data.designation || id), 'danger');
                 $select.val(null).trigger('change.select2');
                 this.recalcAll();
                 return;
             }
 
-            // Always set unit price from catalog on select
-            $row.find(this.options.priceInput).val(data.prix_unitaire || 0);
+            // Store both HT and TTC base unit prices on the row to prevent toggle drift
+            const puHt = parseFloat(data.prix_unitaire) || 0;
+            const tauxTva = parseFloat(data.taux_tva) || 0;
+            let tsUnit = 0;
+            if (data.type_ts === 'MONTANT') tsUnit = parseFloat(data.montant_ts) || 0;
+            else if (data.type_ts === 'POURCENTAGE') tsUnit = puHt * ((parseFloat(data.pourcentage_ts) || 0) / 100);
+            const puTtc = data.prix_unitaire_ttc !== undefined ? parseFloat(data.prix_unitaire_ttc) : Math.round(((puHt + tsUnit) * (1 + tauxTva / 100)) * 100) / 100;
+
+            const $priceInp = $row.find(this.options.priceInput);
+            $row.data('pu-ht', puHt).attr('data-pu-ht', puHt);
+            $row.data('pu-ttc', puTtc).attr('data-pu-ttc', puTtc);
+            $priceInp.data('pu-ht', puHt).attr('data-pu-ht', puHt);
+            $priceInp.data('pu-ttc', puTtc).attr('data-pu-ttc', puTtc);
+
+            if (window.currentModePrix === 'TTC') {
+                $priceInp.val(puTtc);
+            } else {
+                $priceInp.val(puHt);
+            }
 
             // Default qty if empty / zero
             const currentQty = parseFloat($row.find(this.options.qtyInput).val());
@@ -275,8 +307,8 @@
                             this.buildOptionsHtml() +
                         '</select>' +
                     '</td>' +
-                    '<td><input class="form-control text-center qte-input" name="' + this.options.qtyName + '" type="number" step="0.01" min="0" placeholder="1" /></td>' +
-                    '<td><input class="form-control text-end prix-input" name="' + this.options.priceName + '" type="number" step="0.01" min="0" placeholder="0.00" /></td>' +
+                    '<td><input class="form-control text-end prix-input font-monospace" name="' + this.options.priceName + '" type="number" step="0.01" min="0" placeholder="0.00" /></td>' +
+                    '<td><input class="form-control text-center qte-input font-monospace" name="' + this.options.qtyName + '" type="number" step="0.01" min="0.01" placeholder="1" /></td>' +
                     '<td class="text-end montant-cell">0</td>' +
                     '<td class="text-center">' +
                         '<button type="button" class="btn-remove-row removeRowBtn">' +
@@ -339,7 +371,8 @@
                 const productId = line.produit_id || line.produits_id || '';
                 const $select = $row.find(self.options.productSelect);
                 $select.val(productId ? String(productId) : null).trigger('change.select2');
-                $row.find(self.options.qtyInput).val(line.quantite || '');
+                const $qty = $row.find(self.options.qtyInput).val(line.quantite || '');
+                if (line.quantite) $qty.attr('max', line.quantite);
                 $row.find(self.options.priceInput).val(line.prix_unitaire || '');
             });
 

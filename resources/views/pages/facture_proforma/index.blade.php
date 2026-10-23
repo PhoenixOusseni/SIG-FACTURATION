@@ -69,6 +69,7 @@
                                         <th>Code</th>
                                         <th>Référence</th>
                                         <th>Client</th>
+                                        <th class="text-center">Statut</th>
                                         <th>Date</th>
                                         <th style="width: 80px; text-align: center;">Action</th>
                                     </tr>
@@ -81,11 +82,19 @@
                                             </td>
                                             <td>{{ $facture->reference }}</td>
                                             <td>{{ $facture->Contribuable->assujeti ?? 'N/A' }}</td>
+                                            <td class="text-center">
+                                                @if ($facture->estConvertie())
+                                                    <span class="badge bg-success-subtle text-success border border-success px-2 py-1">Facturée</span>
+                                                @else
+                                                    <span class="badge bg-secondary-subtle text-secondary px-2 py-1">{{ ucfirst($facture->statut ?? 'Devis') }}</span>
+                                                @endif
+                                            </td>
                                             <td>{{ $facture->date ?? 'N/A' }}</td>
                                             <td class="text-center">
                                                 <a href="{{ route('module_facture_proforma.show', [$facture->id]) }}"
                                                     class="btn btn-sm btn-primary"
-                                                    style="border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                                                    style="border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;"
+                                                    title="{{ $facture->estConvertie() ? 'Détails & Prévisualisation' : 'Consulter' }}">
                                                     <i class="fa fa-eye"></i>
                                                 </a>
                                             </td>

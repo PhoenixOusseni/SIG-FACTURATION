@@ -29,29 +29,83 @@ class FactureController extends Controller
      */
     public function index()
     {
-        $collection = Facture::with(['Contribuable', 'Service', 'Categorie'])
+        $collection = Facture::with([
+            'Contribuable.Categorie',
+            'Service',
+            'Categorie',
+            'Typefacture',
+            'ElementFactures.Produit.tva',
+            'McfCertifications',
+            'Reglements.User',
+            'FactureAvoirs.ElementFactureAvoirs.Produit.tva',
+            'FactureProforma'
+        ])
             ->orderByDesc('id')
             ->get();
 
+        $proformas = \App\Models\FactureProforma::with(['Contribuable', 'ElementFactureProformas.Produit', 'Facture'])
+            ->orderByDesc('id')
+            ->get();
+
+        $avoirs = \App\Models\FactureAvoir::with(['Contribuable', 'Facture', 'ElementFactureAvoirs.Produit'])
+            ->orderByDesc('id')
+            ->get();
+
+        // Factures certifiées pour le modal d'avoir (uniquement celles pouvant encore subir un avoir)
+        $facturesCertifiees = $collection->filter(function ($f) {
+            return $f->isCertified() && $f->peutSubirAvoir();
+        })->values();
+
+        // Factures non soldées pour le modal de règlement
+        $facturesImpayees = $collection->filter(function ($f) {
+            return $f->reste_a_payer > 0.009;
+        })->values();
+
+        // Factures en erreur MCF
+        $nbErreursMcf = $collection->where('statut', 'Erreur MCF')->count();
+
         $contribuables = Contribuable::orderBy('assujeti')->get();
-        $produits = Produit::orderBy('code')->get();
+        $produits = Produit::with('tva')->where('is_active', true)->orderBy('code')->get();
         $produitsData = $produits->keyBy('id')->map(function ($produit) {
             return [
                 'code' => $produit->code,
                 'designation' => $produit->designation,
+                'label_fiscal' => $produit->label_fiscal,
                 'prix_unitaire' => $produit->prix_unitaire,
+                'prix_unitaire_ttc' => $produit->prix_unitaire_ttc,
                 'qte' => $produit->qte,
+                'is_service' => $produit->isService(),
+                'type_article' => $produit->type_dgi,
+                'taux_tva' => (float) optional($produit->tva)->taux,
+                'groupe_tva' => optional($produit->tva)->code ?: 'A',
+                'type_ts' => $produit->type_ts ?? 'AUCUNE',
+                'montant_ts' => (float) ($produit->montant_ts ?? 0),
+                'pourcentage_ts' => (float) ($produit->pourcentage_ts ?? 0),
             ];
         });
+
         // FA/EA are certified via FactureAvoir, not the sales form.
         $typefactures = Typefacture::whereIn('code', ['FV', 'FT', 'EV', 'ET'])->orderBy('code')->get();
         $modepaies = ModePaie::orderBy('code')->get();
         $bics = Bic::orderBy('code')->get();
         $categories = \App\Models\Categorie::orderBy('code')->get();
         $tvas = \App\Models\Tva::orderBy('code')->get();
+        $services = \App\Models\Service::orderBy('nom')->get();
+        $entete = Entete::singleton();
+
+        // Détection de la connexion réelle au boîtier MCF Eltrade / Émulateur
+        $snapshotService = app(\App\Services\SFE\StatusSnapshotService::class);
+        $snapshotData = $snapshotService->current();
+        $isSimulation = (strtoupper($entete->port_com ?? '') === 'SIMULATION');
+        $sfeConnected = $isSimulation || (($snapshotData['level'] ?? '') === 'connected' && !empty($snapshotData['device']['succes']));
 
         return view('pages.facture.index', compact(
             'collection',
+            'proformas',
+            'avoirs',
+            'facturesCertifiees',
+            'facturesImpayees',
+            'nbErreursMcf',
             'contribuables',
             'produits',
             'produitsData',
@@ -59,7 +113,10 @@ class FactureController extends Controller
             'modepaies',
             'bics',
             'categories',
-            'tvas'
+            'tvas',
+            'services',
+            'entete',
+            'sfeConnected'
         ));
     }
 
@@ -97,7 +154,8 @@ class FactureController extends Controller
         $stockErrors = [];
         foreach ($requestedByProduct as $produitId => $qteDemandee) {
             $produit = Produit::find($produitId);
-            if ($produit && (float) ($produit->qte ?? 0) < $qteDemandee) {
+            // Ne contrôler le stock QUE pour les biens physiques (les services n'ont pas d'inventaire)
+            if ($produit && $produit->isBien() && (float) ($produit->qte ?? 0) < $qteDemandee) {
                 $dispo = number_format((float) ($produit->qte ?? 0), 2, ',', ' ');
                 $stockErrors[] = "« {$produit->designation} » — stock disponible : {$dispo} | demandé : {$qteDemandee}";
             }
@@ -123,19 +181,47 @@ class FactureController extends Controller
             $nextNumber = ($lastFacture ? intval(substr($lastFacture->code, 4, 5)) : 0) + 1;
             $generatedCode = 'FAC-' . str_pad($nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
 
+            // Compilation des 9 lignes libres de commentaires DGI (SECeF ST 1.0)
+            $notesData = [];
+            for ($k = 1; $k <= 9; $k++) {
+                $letter = chr(96 + $k); // a, b, c, ...
+                $val = $request->input("comment_{$k}") ?? $request->input("comment_{$letter}");
+                if (!empty($val)) {
+                    $notesData["Ligne {$k}"] = trim($val);
+                }
+            }
+            if ($request->filled('mention_legale')) {
+                $notesData['mention'] = trim($request->input('mention_legale'));
+            }
+            if ($request->filled('notes_libres')) {
+                $notesData['notes_libres'] = trim($request->input('notes_libres'));
+            }
+            if ($request->filled('mode_prix')) {
+                $notesData['mode_prix'] = strtoupper(trim($request->input('mode_prix')));
+            }
+            $notesJson = !empty($notesData) ? json_encode($notesData, JSON_UNESCAPED_UNICODE) : null;
+
+            $proformaId = $request->filled('facture_proforma_id') ? (int) $request->input('facture_proforma_id') : null;
+
             $facture = Facture::create([
-                'reference'        => $request->reference,
-                'date'             => $request->date,
-                'code'             => $generatedCode,
-                'contribuable_id' => $request->contribuable_id,
-                'service_id'      => $request->service_id,
-                'user_id'        => $request->user_id,
-                'typefacture_id' => $request->typefacture_id ?? null,
-                'modepaie_id'    => $request->modepaie_id ?? null,
-                'bic_id'         => $request->bic_id ?? null,
-                'remise_1'        => $request->remise_1 ?? 0,
-                'remise_2'        => $request->remise_2 ?? 0,
+                'reference'           => $request->reference,
+                'date'                => $request->date ?? date('Y-m-d'),
+                'code'                => $generatedCode,
+                'contribuable_id'     => $request->contribuable_id,
+                'service_id'          => $request->service_id,
+                'user_id'             => $request->user_id ?? auth()->id(),
+                'typefacture_id'      => $request->typefacture_id ?? null,
+                'modepaie_id'         => $request->modepaie_id ?? null,
+                'bic_id'              => $request->bic_id ?? null,
+                'remise_1'            => $request->remise_1 ?? 0,
+                'remise_2'            => $request->remise_2 ?? 0,
+                'facture_proforma_id' => $proformaId,
+                'notes'               => $notesJson,
             ]);
+
+            if ($proformaId) {
+                \App\Models\FactureProforma::where('id', $proformaId)->update(['statut' => 'transformée']);
+            }
 
             if ($request->has('produits_id') && is_array($request->produits_id)) {
                 foreach ($request->produits_id as $index => $produitId) {
@@ -151,16 +237,69 @@ class FactureController extends Controller
                             'designation'   => $request->designation[$index] ?? null,
                         ]);
 
-                        // Décrémenter le stock global du produit (vente client)
-                        if ($quantite > 0) {
-                            Produit::where('id', $produitId)->decrement('qte', $quantite);
+                        // Décrémenter le stock global UNIQUEMENT si le produit est un bien physique
+                        $produitModel = Produit::find($produitId);
+                        if ($produitModel && $produitModel->isBien() && $quantite > 0) {
+                            $produitModel->decrement('qte', $quantite);
                         }
                     }
                 }
             }
 
-            if ((bool) optional(Entete::first())->sfe_automatic_invoice_signing) {
-                $this->sfeSigner->sign($facture->fresh());
+            // Gestion des règlements multiples (Multi-mode de paiement)
+            if ($request->has('reglement_montant') && is_array($request->reglement_montant)) {
+                $rModes = (array) $request->input('reglement_mode', []);
+                $rMontants = (array) $request->input('reglement_montant', []);
+                $rRefs = (array) $request->input('reglement_reference', []);
+
+                foreach ($rMontants as $rIdx => $rMnt) {
+                    $rMnt = (float) $rMnt;
+                    if ($rMnt > 0) {
+                        $mCode = $rModes[$rIdx] ?? 'ESP';
+                        $rModeObj = ModePaie::where('code', $mCode)->orWhere('libelle', $mCode)->first();
+                        $lastReg = \App\Models\Reglement::whereYear('created_at', $year)->orderBy('id', 'desc')->first();
+                        $nextRNum = ($lastReg ? intval(substr($lastReg->code, 4, 5)) : 0) + 1 + $rIdx;
+                        $rCode = 'RGL-' . str_pad($nextRNum, 5, '0', STR_PAD_LEFT) . '/' . $year;
+
+                        \App\Models\Reglement::create([
+                            'code' => $rCode,
+                            'date' => $request->date ?? date('Y-m-d'),
+                            'mode' => $rModeObj ? $rModeObj->libelle : $mCode,
+                            'montant' => $rMnt,
+                            'reference_paiement' => $rRefs[$rIdx] ?? null,
+                            'facture_id' => $facture->id,
+                            'users_id' => auth()->id() ?? $request->user_id,
+                        ]);
+                    }
+                }
+            }
+
+            \App\Models\AuditLog::enregistrer('CREATE', 'FACTURE', "Création de la facture de vente {$facture->code}", $facture->id);
+
+            // Certification immédiate si demandée par l'utilisateur ou si signature automatique activée
+            $actionType = $request->input('action_type');
+            $isAutoSign = (bool) optional(Entete::first())->sfe_automatic_invoice_signing;
+            $certifieeDirect = false;
+
+            $errorMessageMcf = null;
+            if ($actionType === 'certifier' || $isAutoSign) {
+                try {
+                    $this->sfeSigner->sign($facture->fresh());
+                    $certifieeDirect = true;
+                } catch (\Throwable $e) {
+                    report($e);
+                    \Log::warning('Fiscalisation MCF directe échouée à la création', [
+                        'facture_id' => $facture->id,
+                        'message' => $e->getMessage()
+                    ]);
+                    $notesArr = !empty($facture->notes) ? (json_decode($facture->notes, true) ?: []) : [];
+                    $notesArr['sfe_error'] = $e->getMessage();
+                    $facture->update([
+                        'statut' => 'Erreur SFE',
+                        'notes' => json_encode($notesArr, JSON_UNESCAPED_UNICODE)
+                    ]);
+                    $errorMessageMcf = $e->getMessage();
+                }
             }
 
             DB::commit();
@@ -172,13 +311,21 @@ class FactureController extends Controller
                     'facture' => [
                         'id' => $facture->id,
                         'code' => $facture->code,
-                        'statut' => $facture->statut,
+                        'statut' => $facture->fresh()->statut,
+                        'is_certified' => $certifieeDirect || $facture->fresh()->isCertified(),
                     ],
                 ]);
             }
 
-            smilify('success', 'Facture créée en brouillon (' . count((array) $request->produits_id) . ' élément(s)) !');
-            return redirect("module_ordre_facture/" . $facture->id);
+            if ($certifieeDirect) {
+                smilify('success', "Facture {$facture->code} créée et certifiée fiscalement par le boîtier MCF !");
+            } elseif (!empty($errorMessageMcf)) {
+                smilify('warning', "Facture {$facture->code} enregistrée, mais la certification MCF a échoué : {$errorMessageMcf}");
+            } else {
+                smilify('success', 'Facture ' . $facture->code . ' créée en brouillon (' . count((array) $request->produits_id) . ' élément(s)) !');
+            }
+
+            return redirect()->route('module_ordre_facture.index');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -197,118 +344,431 @@ class FactureController extends Controller
      */
     public function show($id)
     {
-        $facture = Facture::with(['Contribuable', 'Service', 'Categorie', 'User', 'Typefacture', 'ModePaie', 'Bic'])->findOrFail($id);
+        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Typefacture', 'ModePaie', 'Bic', 'Reglements'])->findOrFail($id);
         $elements = ElementFacture::with(['Produit.tva'])->where('facture_id', $facture->id)->get();
+        $entete = Entete::singleton();
 
-        $montant_total = $elements->sum(function ($element) {
-            return $element->montant_total ?? ($element->quantite * $element->prix_unitaire);
-        });
+        $data = $this->calculerSyntheseFacture($facture, $elements, $entete);
 
+        $montant_total = $data['net_a_payer'];
         $contribuables = Contribuable::orderBy('assujeti')->get();
         $bases = Produit::orderBy('code')->get();
         $produits = $bases;
 
-        return view('pages.facture.show', compact('facture', 'elements', 'montant_total', 'contribuables', 'bases', 'produits'));
+        return view('pages.facture.show', array_merge($data, compact('facture', 'elements', 'montant_total', 'contribuables', 'bases', 'produits', 'entete')));
     }
 
     /**
-     * Vue d'impression d'une facture.
+     * Retourner les détails d'une facture et ses lignes en format JSON complet (fiscalement balancé).
+     */
+    public function getJson($id)
+    {
+        $facture = Facture::with([
+            'ElementFactures.Produit.tva',
+            'Contribuable',
+            'Typefacture',
+            'Bic',
+            'Reglements',
+            'FactureAvoirs'
+        ])->findOrFail($id);
+
+        $tauxBic = (float) optional($facture->Bic)->taux;
+        $remise1 = (float) ($facture->remise_1 ?? 0);
+        $remise2 = (float) ($facture->remise_2 ?? 0);
+
+        return response()->json([
+            'id' => $facture->id,
+            'code' => $facture->code,
+            'date' => optional($facture->date)->format('Y-m-d') ?? date('Y-m-d'),
+            'contribuable_id' => $facture->contribuable_id,
+            'client_nom' => optional($facture->Contribuable)->assujeti,
+            'client_ifu' => optional($facture->Contribuable)->ifu,
+            'reference' => $facture->reference,
+            'taux_bic' => $tauxBic,
+            'remise_1' => $remise1,
+            'remise_2' => $remise2,
+            'montant_total' => (float) $facture->montant_total,
+            'montant_paye' => (float) $facture->montant_paye,
+            'reste_a_payer' => (float) $facture->reste_a_payer,
+            'trop_percu' => (float) $facture->trop_percu,
+            'solde_avoir_disponible' => (float) $facture->soldeAvoirDisponible(),
+            'a_avoir_total' => (bool) $facture->aAvoirTotal(),
+            'lignes' => $facture->ElementFactures->map(function ($el) use ($tauxBic) {
+                $prod = $el->Produit;
+                $qte = (float) $el->quantite;
+                $pu = (float) $el->prix_unitaire;
+                $montantHt = $qte * $pu;
+
+                $typeTs = $prod ? (string) $prod->type_ts : 'AUCUNE';
+                $montantTsFixe = $prod ? (float) ($prod->montant_ts ?? 0) : 0.0;
+                $pctTs = $prod ? (float) ($prod->pourcentage_ts ?? 0) : 0.0;
+                $tsUnit = 0.0;
+                if ($typeTs === 'POURCENTAGE' && $pctTs > 0) {
+                    $tsUnit = round($pu * ($pctTs / 100.0), 2);
+                } elseif ($montantTsFixe > 0) {
+                    $tsUnit = $montantTsFixe;
+                }
+                $tsTotal = round($tsUnit * $qte, 2);
+
+                $groupeTva = $prod ? strtoupper((string) optional($prod->tva)->code ?: 'A') : 'A';
+                $tauxTva = ($groupeTva === 'A') ? 0.0 : (float) optional(optional($prod)->tva)->taux;
+                $baseTva = $montantHt + $tsTotal;
+                $tvaTotal = round($baseTva * ($tauxTva / 100.0), 2);
+                $ttcTotal = $baseTva + $tvaTotal;
+
+                $isBien = $prod ? (bool) $prod->isBien() : false;
+                $bicTotal = ($isBien && $tauxBic > 0) ? round($ttcTotal * ($tauxBic / 100.0), 2) : 0.0;
+                $totalTtcLigne = $ttcTotal + $bicTotal;
+
+                return [
+                    'id' => $el->id,
+                    'produit_id' => $el->produits_id,
+                    'designation' => $el->designation ?: optional($prod)->designation,
+                    'quantite' => $qte,
+                    'prix_unitaire' => $pu,
+                    'montant_ht' => $montantHt,
+                    'type_ts' => $typeTs,
+                    'montant_ts' => $montantTsFixe,
+                    'pourcentage_ts' => $pctTs,
+                    'ts_unit' => $tsUnit,
+                    'ts_total' => $tsTotal,
+                    'groupe_tva' => $groupeTva,
+                    'taux_tva' => $tauxTva,
+                    'tva_total' => $tvaTotal,
+                    'ttc_total' => $ttcTotal,
+                    'is_service' => $prod ? (bool) $prod->isService() : false,
+                    'is_bien' => $isBien,
+                    'bic_total' => $bicTotal,
+                    'total_ttc_ligne' => $totalTtcLigne,
+                    'montant_total' => $totalTtcLigne,
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Vue d'impression d'une facture au format officiel A4 DGI.
      */
     public function print($id)
     {
-        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Bic'])->findOrFail($id);
+        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Bic', 'ModePaie', 'Reglements', 'FactureAvoirs', 'McfCertifications'])->findOrFail($id);
         $elements = ElementFacture::with(['Produit.tva'])->where('facture_id', $facture->id)->get();
-        $entete = Entete::first();
+        $entete = Entete::singleton();
 
-        // 1) Total brut HT + recensement des taux uniques (TVA et BIC)
-        //    Le produit avec le code "TRANS" est exclu des totaux (transport non taxable)
-        //    mais son montant est conservé à part et réinjecté dans le Net à payer.
-        $total_ht          = 0.0;
+        // Gestion de l'archive immuable si certifiée (Piste d'Audit Fiable DGI)
+        if ($facture->isCertified()) {
+            $duplicata = \App\Models\FactureDuplicata::where('facture_id', $facture->id)->first();
+            if (!$duplicata) {
+                $this->genererArchiveDuplicata($facture, $elements, $entete);
+            }
+        }
+
+        // Détection du DUPLICATA : Dès qu'une facture a déjà été imprimée ou explicitement demandée
+        $isDuplicata = false;
+        if ($facture->statut !== 'BROUILLON') {
+            if ($facture->print_count > 0 || request('duplicata') == 1) {
+                $isDuplicata = true;
+            }
+            if (!request()->has('iframe')) {
+                $facture->increment('print_count');
+                if (!$facture->first_printed_at) {
+                    $facture->update(['first_printed_at' => now()]);
+                }
+            }
+        }
+
+        $data = $this->calculerSyntheseFacture($facture, $elements, $entete);
+        $data['isDuplicata'] = $isDuplicata;
+
+        return view('pages.facture.print_facture', $data);
+    }
+
+    /**
+     * Vue d'impression d'une facture au format ticket de caisse POS 80mm.
+     */
+    public function printTicket($id)
+    {
+        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Bic', 'ModePaie', 'Reglements', 'FactureAvoirs', 'McfCertifications'])->findOrFail($id);
+        $elements = ElementFacture::with(['Produit.tva'])->where('facture_id', $facture->id)->get();
+        $entete = Entete::singleton();
+
+        $isDuplicata = false;
+        if ($facture->statut !== 'BROUILLON') {
+            if ($facture->print_count > 0 || request('duplicata') == 1) {
+                $isDuplicata = true;
+            }
+            if (!request()->has('iframe')) {
+                $facture->increment('print_count');
+                if (!$facture->first_printed_at) {
+                    $facture->update(['first_printed_at' => now()]);
+                }
+            }
+        }
+
+        $data = $this->calculerSyntheseFacture($facture, $elements, $entete);
+        $data['isDuplicata'] = $isDuplicata;
+
+        return view('pages.facture.print_ticket', $data);
+    }
+
+    /**
+     * Enregistrer l'impression effective d'une facture pour déclencher le Duplicata dès les prochaines impressions.
+     */
+    public function marquerImprimee($id)
+    {
+        $facture = Facture::findOrFail($id);
+        $facture->increment('print_count');
+        if (!$facture->first_printed_at) {
+            $facture->update(['first_printed_at' => now()]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'print_count' => $facture->print_count,
+            'is_duplicata' => $facture->print_count > 1,
+        ]);
+    }
+
+    /**
+     * Crée l'archive immuable au moment de la certification (Règle Piste d'audit DGI).
+     */
+    protected function genererArchiveDuplicata(Facture $facture, $elements, Entete $entete): \App\Models\FactureDuplicata
+    {
+        $vendeurSnapshot = [
+            'nom'               => $entete->denomination,
+            'ifu'               => $entete->ifu,
+            'rccm'              => $entete->rccm,
+            'telephone'         => $entete->telephone,
+            'email'             => $entete->email,
+            'regime_fiscal'     => $entete->regime_fiscal,
+            'division_fiscal'   => $entete->division_fiscal,
+            'comptes_bancaires' => $entete->comptes_bancaires,
+        ];
+
+        $clientSnapshot = [
+            'nom'           => optional($facture->Contribuable)->assujeti ?? 'Client Comptoir',
+            'ifu'           => optional($facture->Contribuable)->ifu ?? '',
+            'rccm'          => optional($facture->Contribuable)->rccm ?? '',
+            'telephone'     => optional($facture->Contribuable)->telephone ?? '',
+            'regime_fiscal' => optional($facture->Contribuable)->regime_fiscal ?? '',
+            'categorie'     => optional(optional($facture->Contribuable)->Categorie)->libelle ?? '',
+        ];
+
+        $lignesSnapshot = [];
+        foreach ($elements as $el) {
+            $lignesSnapshot[] = [
+                'designation'    => $el->designation ?: optional($el->Produit)->designation,
+                'label_fiscal'   => optional($el->Produit)->label_fiscal,
+                'quantite'       => (float) $el->quantite,
+                'prix_unitaire'  => (float) $el->prix_unitaire,
+                'taux_tva'       => (float) optional(optional($el->Produit)->tva)->taux,
+                'type_ts'        => optional($el->Produit)->type_ts,
+                'montant_ts'     => (float) optional($el->Produit)->montant_ts,
+                'pourcentage_ts' => (float) optional($el->Produit)->pourcentage_ts,
+            ];
+        }
+
+        $certif = $facture->certification_active;
+
+        return \App\Models\FactureDuplicata::firstOrCreate(
+            ['facture_id' => $facture->id],
+            [
+                'numero_interne'     => $facture->code,
+                'date_certification' => $certif?->date_certification ?? now(),
+                'vendeur_json'       => $vendeurSnapshot,
+                'client_json'        => $clientSnapshot,
+                'lignes_json'        => $lignesSnapshot,
+                'paiements_json'     => $facture->Reglements->toArray(),
+                'totaux_json'        => [
+                    'montant_total' => $facture->montant_total,
+                ],
+                'dgi_json'           => [
+                    'signature' => $facture->dgi_signature,
+                    'nim'       => $facture->dgi_nim_machine,
+                    'compteur'  => $facture->dgi_compteur,
+                    'qrcode'    => $facture->dgi_qrcode,
+                ],
+            ]
+        );
+    }
+
+    /**
+     * Calcule la synthèse fiscale stricte conforme aux normes DGI / SECeF BF ST 1.0.
+     */
+    protected function calculerSyntheseFacture(Facture $facture, $elements, Entete $entete): array
+    {
+        $total_ht_brut = 0.0;
+        $total_ts = 0.0;
         $montant_transport = 0.0;
-        $transport_qte     = 0.0;
-        $transport_prix    = 0.0;
-        $transport_label   = 'Frais de Transport';
-        $tva_groups = []; // [taux => ['taux','base','taxe']]
-        $bic_groups = []; // [taux => ['taux','base_ttc','montant']]
+        $transport_label = 'Frais de transport';
+
+        // Lignes ventilées par groupe de taxation réel (A, B, C...)
+        $lignesParGroupe = [];
 
         foreach ($elements as $element) {
             $code = strtoupper((string) optional($element->Produit)->code);
             if ($code === 'TRANS') {
-                $qte = (float) $element->quantite;
-                $pu  = (float) $element->prix_unitaire;
-                $montant_transport += $qte * $pu;
-                $transport_qte  += $qte;
-                $transport_prix  = $pu; // dernier prix unitaire rencontré
-                if ($desig = $element->designation ?? optional($element->Produit)->designation) {
-                    $transport_label = $desig;
-                }
+                $montant_transport += (float) $element->quantite * (float) $element->prix_unitaire;
+                $transport_label = $element->designation ?: 'Frais de transport';
                 continue;
             }
 
-            $quantite  = (float) $element->quantite;
-            $prix      = (float) $element->prix_unitaire;
-            $montantHt = $quantite * $prix;
+            $qte = (float) $element->quantite;
+            $pu = (float) $element->prix_unitaire;
+            $montantLigneHt = $qte * $pu;
+            $total_ht_brut += $montantLigneHt;
 
-            $total_ht += $montantHt;
+            $produit = $element->Produit;
+            $tsUnit = 0.0;
+            if ($produit) {
+                if ($produit->type_ts === 'POURCENTAGE' && (float) ($produit->pourcentage_ts ?? 0) > 0) {
+                    $tsUnit = round($pu * ((float) $produit->pourcentage_ts / 100.0), 2);
+                } else {
+                    $tsUnit = (float) ($produit->montant_ts ?? 0);
+                }
+            }
+            $tsLigne = $tsUnit * $qte;
+            $total_ts += $tsLigne;
 
-            $tauxTva = (float) optional(optional($element->Produit)->tva)->taux;
-            $keyTva  = (string) $tauxTva;
-            if (!isset($tva_groups[$keyTva])) {
-                $tva_groups[$keyTva] = ['taux' => $tauxTva, 'base' => 0.0, 'taxe' => 0.0];
+            $groupe = strtoupper((string) optional(optional($produit)->tva)->code ?: 'A');
+            $tauxTva = $groupe === 'A' ? 0.0 : (float) optional(optional($produit)->tva)->taux;
+
+            if (!isset($lignesParGroupe[$groupe])) {
+                $lignesParGroupe[$groupe] = [
+                    'groupe' => $groupe,
+                    'taux' => $tauxTva,
+                    'ht_brut' => 0.0,
+                    'ts' => 0.0,
+                ];
+            }
+            $lignesParGroupe[$groupe]['ht_brut'] += $montantLigneHt;
+            $lignesParGroupe[$groupe]['ts'] += $tsLigne;
+        }
+
+        // Remises globales réparties au prorata du HT
+        $remise_1 = (float) ($facture->remise_1 ?? 0);
+        $remise_2 = (float) ($facture->remise_2 ?? 0);
+        $remise_totale = $remise_1 + $remise_2;
+        $net_commercial = max(0, $total_ht_brut - $remise_totale);
+        $prorata = $total_ht_brut > 0 ? ($net_commercial / $total_ht_brut) : 1.0;
+
+        // Calcul exact de chaque groupe de TVA
+        $tva_groups = [];
+        $total_taxe = 0.0;
+
+        ksort($lignesParGroupe);
+        foreach ($lignesParGroupe as $grp => $info) {
+            $baseHt = round($info['ht_brut'] * $prorata, 2);
+            $baseTva = round($baseHt + $info['ts'], 2);
+            $montantTva = round($baseTva * ($info['taux'] / 100), 2);
+            $total_taxe += $montantTva;
+
+            $tva_groups[$grp] = [
+                'groupe' => $grp,
+                'taux' => $info['taux'],
+                'base' => $baseHt, // Base HT pure du groupe conforme au Total Net HT
+                'base_tva' => $baseTva, // Base taxable TVA (HT + TS)
+                'taxe' => $montantTva,
+                'ts' => $info['ts'],
+            ];
+        }
+
+        $total_ttc_brut = $net_commercial + $total_ts + $total_taxe;
+
+        // PSVB (appliqué UNIQUEMENT sur les biens matériels LOCBIE / IMPBIE, jamais sur les services LOCSER / IMPSER)
+        $tauxBic = (float) optional($facture->Bic)->taux;
+        $total_bic = 0.0;
+        $bic_groups = [];
+        if ($tauxBic > 0) {
+            $base_psvb_biens = 0.0;
+            foreach ($elements as $element) {
+                $produit = $element->Produit;
+                if ($produit && $produit->isBien()) {
+                    $qte = (float) $element->quantite;
+                    $pu = (float) $element->prix_unitaire;
+                    $ligneHt = $qte * $pu * $prorata;
+                    $tsUnit = 0.0;
+                    if ($produit->type_ts === 'POURCENTAGE' && (float) ($produit->pourcentage_ts ?? 0) > 0) {
+                        $tsUnit = round($pu * ((float) $produit->pourcentage_ts / 100.0), 2);
+                    } else {
+                        $tsUnit = (float) ($produit->montant_ts ?? 0);
+                    }
+                    $tsLigne = $tsUnit * $qte;
+                    $tauxTvaLigne = (float) optional(optional($produit)->tva)->taux;
+                    $baseTvaLigne = $ligneHt + $tsLigne;
+                    $tvaLigne = $baseTvaLigne * ($tauxTvaLigne / 100.0);
+                    $base_psvb_biens += ($baseTvaLigne + $tvaLigne);
+                }
+            }
+
+            if ($base_psvb_biens > 0) {
+                $total_bic = round($base_psvb_biens * ($tauxBic / 100), 2);
+                $bic_groups[] = [
+                    'taux' => $tauxBic,
+                    'base_ttc' => round($base_psvb_biens, 2),
+                    'montant' => $total_bic,
+                ];
             }
         }
 
-        // Récupérer le taux BIC de la facture (une seule fois)
-        $tauxBic = (float) optional($facture->Bic)->taux;
-        if ($tauxBic > 0) {
-            $keyBic = (string) $tauxBic;
-            $bic_groups[$keyBic] = ['taux' => $tauxBic, 'base_ttc' => 0.0, 'montant' => 0.0];
+        // Timbre fiscal de quittance (en cas de paiement en espèces selon le barème DGI)
+        $total_timbre = 0.0;
+        $isEspeces = optional($facture->ModePaie)->code === 'ESP';
+        if ($isEspeces && !in_array($facture->type_code, ['FA', 'EA'], true)) {
+            $ttcBase = $total_ttc_brut + $total_bic;
+            if ($ttcBase >= 1000 && $ttcBase <= 5000) {
+                $total_timbre = 30.0;
+            } elseif ($ttcBase > 5000 && $ttcBase <= 10000) {
+                $total_timbre = 50.0;
+            } elseif ($ttcBase > 10000 && $ttcBase <= 50000) {
+                $total_timbre = 100.0;
+            } elseif ($ttcBase > 50000) {
+                $total_timbre = 100.0 + ceil(($ttcBase - 50000) / 50000) * 50.0;
+            }
         }
 
-        // 2) Net commercial = Total brut HT − Remise
-        $remise_1         = (float) ($facture->remise_1 ?? 0);
-        $remise_2         = (float) ($facture->remise_2 ?? 0);
-        $net_commercial = max(0, $total_ht - $remise_1 - $remise_2);
-
-        // 3) TVA : chaque taux présent est appliqué sur la TOTALITÉ du Net commercial
-        //    TVA(taux) = Net commercial × taux
-        foreach ($tva_groups as $key => $g) {
-            $tva_groups[$key]['base'] = $net_commercial;
-            $tva_groups[$key]['taxe'] = $net_commercial * $g['taux'] / 100;
-        }
-        $total_taxe = array_sum(array_column($tva_groups, 'taxe'));
-
-        // 4) Total TTC = Net commercial + somme des TVA
-        $total_ttc = $net_commercial + $total_taxe;
-
-        // 5) BIC : chaque taux présent est appliqué sur la TOTALITÉ du Total TTC
-        //    BIC(taux) = Total TTC × taux
-        foreach ($bic_groups as $key => $g) {
-            $bic_groups[$key]['base_ttc'] = $total_ttc;
-            $bic_groups[$key]['montant']  = $total_ttc * $g['taux'] / 100;
-        }
-        $total_bic = array_sum(array_column($bic_groups, 'montant'));
-
-        // 6) Net à payer = Total TTC + BIC + Transport (l'avance est déduite côté vue)
-        $net_a_payer = $total_ttc + $total_bic + $montant_transport;
+        // Le Net à Payer officiel de la facture est son montant total TTC
+        $total_ttc = round($total_ttc_brut + $total_bic + $montant_transport, 2);
+        $net_a_payer = $total_ttc;
+        $avance = (float) $facture->Reglements()->sum('montant');
+        $reste_a_payer = max(0, round($net_a_payer - $avance, 2));
 
         $typeCode = $facture->type_code;
         $isExport = in_array($typeCode, ['EV', 'ET'], true);
         $isAcompte = in_array($typeCode, ['FT', 'ET'], true);
-        $requireCertForPrint = (bool) optional($entete)->sfe_automatic_invoice_signing;
+        $isAvoir = in_array($typeCode, ['FA', 'EA'], true);
         $isCertified = (bool) ($facture->certification_active || $facture->dgi_signature);
+        $notesArray = $facture->commentaires_dgi;
+        $modePrix = strtoupper((string) ($notesArray['mode_prix'] ?? ($total_taxe > 0 ? 'TTC' : 'HT')));
 
-        return view('pages.facture.print_facture', compact(
-            'facture', 'elements', 'entete',
-            'total_ht', 'remise_1', 'remise_2', 'net_commercial',
-            'tva_groups', 'total_taxe',
-            'bic_groups', 'total_bic',
-            'montant_transport', 'transport_label',
-            'transport_qte', 'transport_prix',
-            'total_ttc', 'net_a_payer',
-            'typeCode', 'isExport', 'isAcompte',
-            'requireCertForPrint', 'isCertified'
-        ));
+        return [
+            'facture' => $facture,
+            'elements' => $elements,
+            'entete' => $entete,
+            'total_ht' => $total_ht_brut,
+            'remise_1' => $remise_1,
+            'remise_2' => $remise_2,
+            'remise_totale' => $remise_totale,
+            'net_commercial' => $net_commercial,
+            'tva_groups' => $tva_groups,
+            'total_taxe' => $total_taxe,
+            'total_ts' => $total_ts,
+            'bic_groups' => $bic_groups,
+            'total_bic' => $total_bic,
+            'total_timbre' => $total_timbre,
+            'montant_transport' => $montant_transport,
+            'transport_label' => $transport_label,
+            'total_ttc' => $total_ttc,
+            'avance' => $avance,
+            'reste_a_payer' => $reste_a_payer,
+            'net_a_payer' => $net_a_payer,
+            'typeCode' => $typeCode,
+            'isExport' => $isExport,
+            'isAcompte' => $isAcompte,
+            'isAvoir' => $isAvoir,
+            'isCertified' => $isCertified,
+            'mode_prix' => $modePrix,
+        ];
     }
 
     /**
@@ -415,32 +875,41 @@ class FactureController extends Controller
     {
         $facture = Facture::findOrFail($id);
 
-        if ($facture->is_fiscal_locked) {
-            smilify('error', 'Facture fiscalisée : suppression interdite. Utilisez un avoir fiscal.');
+        if ($facture->isCertified()) {
+            if (function_exists('smilify')) {
+                smilify('error', "La facture {$facture->code} est déjà certifiée fiscalement. Sa suppression est strictement interdite par la DGI (SECeF). Émettez un Avoir fiscal.");
+            }
             return redirect()->route('module_ordre_facture.show', $facture->id);
         }
 
         // Une facture déjà réglée (au moins un règlement) ne peut pas être supprimée.
         if ($facture->Reglements()->count() > 0) {
             if (function_exists('smilify')) {
-                smilify('error', 'Impossible de supprimer une facture réglée.');
+                smilify('error', "Impossible de supprimer la facture {$facture->code} : des règlements financiers y sont déjà rattachés.");
             }
             return redirect()->route('module_ordre_facture.show', $facture->id);
         }
 
-        // Rétablir le stock global avant suppression
+        $code = $facture->code;
+
+        // Rétablir le stock global des biens physiques uniquement (pas pour les prestations de service)
         $elements = ElementFacture::where('facture_id', $facture->id)->get();
         foreach ($elements as $el) {
             if ($el->produits_id && (float) $el->quantite > 0) {
-                Produit::where('id', $el->produits_id)->increment('qte', (float) $el->quantite);
+                $prod = Produit::find($el->produits_id);
+                if ($prod && $prod->isBien()) {
+                    $prod->increment('qte', (float) $el->quantite);
+                }
             }
         }
 
         ElementFacture::where('facture_id', $facture->id)->delete();
         $facture->delete();
 
+        \App\Models\AuditLog::enregistrer('DELETE', 'FACTURE', "Suppression de la facture brouillon {$code}", $id);
+
         if (function_exists('smilify')) {
-            smilify('success', 'Facture supprimée avec succès.');
+            smilify('success', "Facture brouillon {$code} supprimée avec succès et stock rétabli.");
         }
 
         return redirect()->route('module_ordre_facture.index');
@@ -532,5 +1001,66 @@ class FactureController extends Controller
         ElementFacture::where('facture_id', $facture->id)
             ->whereNotIn('id', $keptIds)
             ->delete();
+    }
+
+    /**
+     * Tente de recertifier une facture spécifique en statut Brouillon ou Erreur MCF.
+     */
+    public function recertifier($id)
+    {
+        $facture = Facture::findOrFail($id);
+
+        if ($facture->isCertified()) {
+            smilify('info', "La facture {$facture->code} est déjà certifiée fiscalement.");
+            return redirect()->route('module_ordre_facture.index');
+        }
+
+        try {
+            $this->sfeSigner->sign($facture);
+            \App\Models\AuditLog::enregistrer('SIGN', 'FACTURE', "Certification réussie de la facture {$facture->code}", $facture->id);
+            smilify('success', "Facture {$facture->code} certifiée avec succès par le boîtier MCF Eltrade (SECeF ST 1.0) !");
+        } catch (\Throwable $e) {
+            report($e);
+            $facture->update(['statut' => 'Erreur MCF']);
+            \App\Models\AuditLog::enregistrer('ERROR', 'MCF', "Échec de certification facture {$facture->code} : " . $e->getMessage(), $facture->id);
+            smilify('error', "Échec de certification MCF : " . $e->getMessage());
+        }
+
+        return redirect()->route('module_ordre_facture.index');
+    }
+
+    /**
+     * Tente de recertifier en lot toutes les factures en erreur.
+     */
+    public function recertifierTout()
+    {
+        $factures = Facture::where('statut', 'Erreur MCF')->get();
+        if ($factures->isEmpty()) {
+            smilify('info', "Aucune facture en erreur à recertifier.");
+            return redirect()->route('module_ordre_facture.index');
+        }
+
+        $succes = 0;
+        $echecs = 0;
+
+        foreach ($factures as $facture) {
+            try {
+                $this->sfeSigner->sign($facture);
+                $succes++;
+                usleep(500000); // Pause de 500ms entre envois série
+            } catch (\Throwable $e) {
+                $echecs++;
+            }
+        }
+
+        if ($succes > 0 && $echecs === 0) {
+            smilify('success', "{$succes} facture(s) recertifiée(s) avec succès !");
+        } elseif ($succes > 0 && $echecs > 0) {
+            smilify('warning', "{$succes} facture(s) recertifiée(s) avec succès, {$echecs} encore en erreur.");
+        } else {
+            smilify('error', "Échec de recertification sur les {$echecs} facture(s). Vérifiez la liaison avec le boîtier MCF.");
+        }
+
+        return redirect()->route('module_ordre_facture.index');
     }
 }

@@ -51,10 +51,60 @@
                                             <td>
                                                 <span class="badge bg-info">{{ $item->taux }} %</span>
                                             </td>
-                                            <td class="text-center d-flex justify-content-center" style="gap: 0.5rem;">
-                                                <a href="{{ route('module_tva.show', [$item->id]) }}" class="btn btn-sm btn-success" style="border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
-                                                    <i class="fa fa-eye"></i>
-                                                </a>
+                                            <td class="text-center">
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <a href="{{ route('module_tva.show', [$item->id]) }}" class="btn btn-outline-info" title="Voir les produits associés">
+                                                        <i class="fa fa-eye"></i>
+                                                    </a>
+                                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editTvaModal{{ $item->id }}" title="Modifier">
+                                                        <i class="fa fa-edit"></i>
+                                                    </button>
+                                                    <form action="{{ route('module_tva.destroy', [$item->id]) }}" method="POST" class="d-inline" onsubmit="return confirm('Supprimer ce groupe de TVA ?')">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn btn-outline-danger" title="Supprimer">
+                                                            <i class="fa fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+
+                                                {{-- Modal d'édition TVA --}}
+                                                <div class="modal fade text-start" id="editTvaModal{{ $item->id }}" tabindex="-1" aria-hidden="true">
+                                                    <div class="modal-dialog modal-dialog-centered">
+                                                        <div class="modal-content">
+                                                            <form action="{{ route('module_tva.update', [$item->id]) }}" method="POST">
+                                                                @csrf
+                                                                @method('PUT')
+                                                                <div class="modal-header bg-primary text-white">
+                                                                    <h5 class="modal-title"><i class="fa fa-edit me-2"></i> Modifier la TVA : {{ $item->code }}</h5>
+                                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                </div>
+                                                                <div class="modal-body p-3">
+                                                                    <div class="mb-3">
+                                                                        <label class="form-label fw-bold">Code Groupe <span class="text-danger">*</span></label>
+                                                                        <input class="form-control" name="code" type="text" value="{{ old('code', $item->code) }}" required />
+                                                                    </div>
+                                                                    <div class="mb-3">
+                                                                        <label class="form-label fw-bold">Intitulé / Libellé <span class="text-danger">*</span></label>
+                                                                        <input class="form-control" name="intitule" type="text" value="{{ old('intitule', $item->intitule) }}" required />
+                                                                    </div>
+                                                                    <div class="mb-3">
+                                                                        <label class="form-label fw-bold">Taux (%) <span class="text-danger">*</span></label>
+                                                                        <input class="form-control" name="taux" type="number" step="0.01" min="0" max="100" value="{{ old('taux', $item->taux) }}" required />
+                                                                    </div>
+                                                                    <div class="mb-3">
+                                                                        <label class="form-label">Compte comptable</label>
+                                                                        <input class="form-control" name="compte_tva" type="number" value="{{ old('compte_tva', $item->compte_tva) }}" />
+                                                                    </div>
+                                                                </div>
+                                                                <div class="modal-footer bg-light">
+                                                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                                                                    <button class="btn btn-primary btn-sm" type="submit"><i class="fas fa-save me-1"></i> Enregistrer</button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </td>
                                         </tr>
                                     @endforeach

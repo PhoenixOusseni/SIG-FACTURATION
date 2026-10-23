@@ -47,24 +47,21 @@ class PageController extends Controller
         $nombreFacturesSoldees    = $collection->filter(fn($f) => $f->statut_paiement === 'soldée')->count();
         $nombreFacturesPartielles = $collection->filter(fn($f) => $f->statut_paiement === 'partielle')->count();
 
-        // ── KPI financiers – mois courant (net à payer = TTC + BIC) ──
-        $calcNetAPayer = function ($facture) {
-            $total = 0.0;
-            foreach ($facture->ElementFactures as $el) {
-                $ht    = (float) $el->quantite * (float) $el->prix_unitaire;
-                $tva   = (float) optional(optional($el->Produit)->tva)->taux;
-                $ttc   = $ht + ($ht * $tva / 100);
-                $bic   = $ttc * ((float) optional($facture->Bic)->taux) / 100;
-                $total += $ttc + $bic;
-            }
-            return $total;
-        };
-
-        $totalCaMois = $collection
+        // ── KPI financiers – mois courant (net à payer = Ventes - Avoirs) ──
+        $totalVentesMois = $collection
             ->filter(fn($f) => $f->date &&
                 \Carbon\Carbon::parse($f->date)->month == $moisCourant &&
-                \Carbon\Carbon::parse($f->date)->year  == $anneeCourante)
-            ->sum($calcNetAPayer);
+                \Carbon\Carbon::parse($f->date)->year  == $anneeCourante &&
+                $f->statut !== 'brouillon')
+            ->sum(fn($f) => (float) $f->montant_total);
+
+        $totalAvoirsMois = (float) \App\Models\FactureAvoir::whereMonth('date', $moisCourant)
+            ->whereYear('date', $anneeCourante)
+            ->where('statut', '!=', 'brouillon')
+            ->get()
+            ->sum('montant_total');
+
+        $totalCaMois = max(0.0, round($totalVentesMois - $totalAvoirsMois, 2));
 
         $totalEncaissementsMois = (float) DB::table('reglements')
             ->whereBetween('date', [
@@ -80,8 +77,16 @@ class PageController extends Controller
             ])
             ->sum('montant');
 
-        // ── KPI financiers – global (net à payer = TTC + BIC) ──
-        $totalCaGlobal = $collection->sum($calcNetAPayer);
+        // ── KPI financiers – global (net = Ventes - Avoirs) ──
+        $totalVentesGlobal = $collection
+            ->filter(fn($f) => $f->statut !== 'brouillon')
+            ->sum(fn($f) => (float) $f->montant_total);
+
+        $totalAvoirsGlobal = (float) \App\Models\FactureAvoir::where('statut', '!=', 'brouillon')
+            ->get()
+            ->sum('montant_total');
+
+        $totalCaGlobal = max(0.0, round($totalVentesGlobal - $totalAvoirsGlobal, 2));
 
         $totalEncaissements = (float) DB::table('reglements')->sum('montant');
 
@@ -129,20 +134,30 @@ class PageController extends Controller
         $debutEvolution = Carbon::now()->subMonths(5)->startOfMonth();
         $finEvolution   = Carbon::now()->endOfMonth();
 
-        // YEAR()/MONTH() are MySQL-only; PostgreSQL needs EXTRACT().
+        // YEAR()/MONTH() are MySQL-only; PostgreSQL needs EXTRACT(); SQLite uses strftime().
         $driver = DB::getDriverName();
-        $yearExprFacture  = $driver === 'pgsql'
-            ? 'EXTRACT(YEAR FROM factures.date)::int'
-            : 'YEAR(factures.date)';
-        $monthExprFacture = $driver === 'pgsql'
-            ? 'EXTRACT(MONTH FROM factures.date)::int'
-            : 'MONTH(factures.date)';
-        $yearExprReg      = $driver === 'pgsql'
-            ? 'EXTRACT(YEAR FROM date)::int'
-            : 'YEAR(date)';
-        $monthExprReg     = $driver === 'pgsql'
-            ? 'EXTRACT(MONTH FROM date)::int'
-            : 'MONTH(date)';
+        if ($driver === 'pgsql') {
+            $yearExprFacture  = 'EXTRACT(YEAR FROM factures.date)::int';
+            $monthExprFacture = 'EXTRACT(MONTH FROM factures.date)::int';
+            $yearExprReg      = 'EXTRACT(YEAR FROM date)::int';
+            $monthExprReg     = 'EXTRACT(MONTH FROM date)::int';
+            $yearExprAvoir    = 'EXTRACT(YEAR FROM facture_avoirs.date)::int';
+            $monthExprAvoir   = 'EXTRACT(MONTH FROM facture_avoirs.date)::int';
+        } elseif ($driver === 'sqlite') {
+            $yearExprFacture  = "CAST(strftime('%Y', factures.date) AS INTEGER)";
+            $monthExprFacture = "CAST(strftime('%m', factures.date) AS INTEGER)";
+            $yearExprReg      = "CAST(strftime('%Y', date) AS INTEGER)";
+            $monthExprReg     = "CAST(strftime('%m', date) AS INTEGER)";
+            $yearExprAvoir    = "CAST(strftime('%Y', facture_avoirs.date) AS INTEGER)";
+            $monthExprAvoir   = "CAST(strftime('%m', facture_avoirs.date) AS INTEGER)";
+        } else {
+            $yearExprFacture  = 'YEAR(factures.date)';
+            $monthExprFacture = 'MONTH(factures.date)';
+            $yearExprReg      = 'YEAR(date)';
+            $monthExprReg     = 'MONTH(date)';
+            $yearExprAvoir    = 'YEAR(facture_avoirs.date)';
+            $monthExprAvoir   = 'MONTH(facture_avoirs.date)';
+        }
 
         $caParMois = DB::table('element_factures')
             ->join('factures', 'element_factures.facture_id', '=', 'factures.id')
@@ -150,6 +165,16 @@ class PageController extends Controller
             ->selectRaw("{$yearExprFacture} as annee, {$monthExprFacture} as mois")
             ->selectRaw('SUM(element_factures.quantite * element_factures.prix_unitaire) as total')
             ->groupByRaw("{$yearExprFacture}, {$monthExprFacture}")
+            ->get()
+            ->keyBy(fn($row) => sprintf('%04d-%02d', $row->annee, $row->mois));
+
+        $avoirsParMois = DB::table('element_facture_avoirs')
+            ->join('facture_avoirs', 'element_facture_avoirs.facture_avoir_id', '=', 'facture_avoirs.id')
+            ->where('facture_avoirs.statut', '!=', 'brouillon')
+            ->whereBetween('facture_avoirs.date', [$debutEvolution->toDateString(), $finEvolution->toDateString()])
+            ->selectRaw("{$yearExprAvoir} as annee, {$monthExprAvoir} as mois")
+            ->selectRaw('SUM(element_facture_avoirs.quantite * element_facture_avoirs.prix_unitaire) as total')
+            ->groupByRaw("{$yearExprAvoir}, {$monthExprAvoir}")
             ->get()
             ->keyBy(fn($row) => sprintf('%04d-%02d', $row->annee, $row->mois));
 
@@ -166,7 +191,9 @@ class PageController extends Controller
             $labels[] = $moisFr[$month->month - 1] . ' ' . $month->year;
 
             $periode = $month->format('Y-m');
-            $ca       = (float) optional($caParMois->get($periode))->total;
+            $caBrut   = (float) optional($caParMois->get($periode))->total;
+            $avoirTot = (float) optional($avoirsParMois->get($periode))->total;
+            $ca       = max(0.0, $caBrut - $avoirTot);
             $enc      = (float) optional($encaissementsParMois->get($periode))->total;
 
             $evolutionCa[]            = round($ca, 2);

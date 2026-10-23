@@ -1,4 +1,4 @@
-﻿@extends('layouts.master')
+@extends('layouts.master')
 
 @section('title')
     <title>SIG - CFE | Facturation</title>
@@ -66,29 +66,25 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div></div>
                         <div>
-                            <a href="{{ route('module_ordre_facture.index') }}" class="btn btn-light btn-sm">
-                                <i data-feather="arrow-left"></i>
+                            <a href="{{ route('module_ordre_facture.index') }}" class="btn btn-outline-secondary btn-sm fw-bold">
+                                <i class="fas fa-arrow-left me-1"></i> Fermer / Retour au Hub
                             </a>
                             @if(!$facture->is_fiscal_locked)<a href="{{ route('module_ordre_facture.edit', $facture->id) }}" class="btn btn-warning btn-sm">
                                 <i data-feather="edit"></i>
                             </a>@endif
                             <a href="{{ url('print_ordre_facture/' . $facture->id) }}" class="btn btn-success btn-sm"
-                                target="_blank">
-                                <i data-feather="printer"></i>
+                                target="_blank" title="Imprimer Format A4 Officiel DGI">
+                                <i data-feather="printer"></i> A4 Officiel
+                            </a>
+                            <a href="{{ route('print_ticket_facture', $facture->id) }}" class="btn btn-primary btn-sm"
+                                target="_blank" title="Imprimer Ticket Thermique 80mm">
+                                <i data-feather="file-text"></i> Ticket 80mm
                             </a>
                             <a href="{{ url('print_bon_livraison/' . $facture->id) }}" class="btn btn-info btn-sm"
-                                target="_blank">
-                                <i data-feather="printer"></i>
+                                target="_blank" title="Imprimer Bon de livraison">
+                                <i data-feather="truck"></i> Bon de livraison
                             </a>
-                            @if (!$facture->is_fiscal_locked && $facture->Reglements()->count() === 0)
-                                <form action="{{ route('module_ordre_facture.destroy', $facture->id) }}" method="POST" class="d-inline-block" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette facture ? Cette action est irréversible.')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-danger btn-sm">
-                                        <i data-feather="trash-2"></i>
-                                    </button>
-                                </form>
-                            @endif
+                            {{-- Traçabilité fiscale : les factures doivent être conservées et recertifiées --}}
                         </div>
                     </div>
                 </div>
@@ -217,7 +213,7 @@
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="info-label">BIC</div>
+                            <div class="info-label">PSVB</div>
                             <div class="info-value">
                                 @if ($facture->Bic)
                                     <span class="badge bg-warning">{{ $facture->Bic->code }}</span>
@@ -293,70 +289,8 @@
             {{-- ==================== RÈGLEMENTS ==================== --}}
             @php
                 $reglements = $facture->Reglements()->orderByDesc('date')->get();
-
-                // ----- Calculs alignés sur la page d'impression (print_facture) -----
-                // 1) Total brut HT + recensement des taux uniques TVA / PSVBB
-                //    Le produit TRANS est exclu du total brut (et donc de la TVA/PSVBB),
-                //    mais son montant est ajouté en positif au Net à payer.
-                $total_ht    = 0.0;
-                $total_trans = 0.0;
-                $tva_groups  = []; // [taux => ['taux','base','taxe']]
-                $bic_groups  = []; // [taux => ['taux','base_ttc','montant']]
-
-                foreach ($elements as $el) {
-                    $codeProduit = optional($el->Produit)->code;
-                    $montantHt   = (float) $el->quantite * (float) $el->prix_unitaire;
-
-                    if ($codeProduit === 'TRANS') {
-                        $total_trans += $montantHt;
-                        continue; // n'entre ni dans Total brut, ni dans TVA/PSVBB
-                    }
-
-                    $total_ht += $montantHt;
-
-                    $tauxTva = (float) optional(optional($el->Produit)->tva)->taux;
-                    $keyTva  = (string) $tauxTva;
-                    if (!isset($tva_groups[$keyTva])) {
-                        $tva_groups[$keyTva] = ['taux' => $tauxTva, 'base' => 0.0, 'taxe' => 0.0];
-                    }
-
-                    $tauxBic = (float) optional(optional($el->Produit)->bic)->taux;
-                    if ($tauxBic > 0) {
-                        $keyBic = (string) $tauxBic;
-                        if (!isset($bic_groups[$keyBic])) {
-                            $bic_groups[$keyBic] = ['taux' => $tauxBic, 'base_ttc' => 0.0, 'montant' => 0.0];
-                        }
-                    }
-                }
-
-                // 2) Net commercial = Total brut HT − Remise 1 − Remise 2
-                $remise_1       = (float) ($facture->remise_1 ?? 0);
-                $remise_2       = (float) ($facture->remise_2 ?? 0);
-                $net_commercial = max(0, $total_ht - $remise_1 - $remise_2);
-
-                // 3) TVA(taux) = Net commercial × taux
-                foreach ($tva_groups as $k => $g) {
-                    $tva_groups[$k]['base'] = $net_commercial;
-                    $tva_groups[$k]['taxe'] = $net_commercial * $g['taux'] / 100;
-                }
-                $total_taxe = array_sum(array_column($tva_groups, 'taxe'));
-
-                // 4) Total TTC = Net commercial + Σ TVA
-                $total_ttc = $net_commercial + $total_taxe;
-
-                // 5) PSVBB(taux) = Total TTC × taux
-                foreach ($bic_groups as $k => $g) {
-                    $bic_groups[$k]['base_ttc'] = $total_ttc;
-                    $bic_groups[$k]['montant']  = $total_ttc * $g['taux'] / 100;
-                }
-                $total_bic = array_sum(array_column($bic_groups, 'montant'));
-
-                // 6) Net à payer = TTC + PSVBB − Transport − Avance (montant déjà payé)
-                $montantPaye = (float) $facture->montant_paye;
-                $netAPayer   = round($total_ttc + $total_bic - $total_trans - $montantPaye, 2);
-                $netAPayer   = max(0, $netAPayer);
-                $resteAPayer = $netAPayer;
-
+                $montantPaye = (float) ($avance ?? $facture->Reglements()->sum('montant'));
+                $resteAPayer = max(0, (float) ($net_a_payer ?? ($total_ttc - $montantPaye)));
                 if ($montantPaye <= 0) {
                     $statutPaiement = 'impayée';
                 } elseif ($resteAPayer <= 0.009) {
@@ -404,14 +338,34 @@
                             <div class="info-label">TVA</div>
                             <div class="info-value"><strong>{{ number_format($total_taxe, 0, ',', ' ') }} FCFA</strong></div>
                         </div>
+                        @if($total_ts > 0)
                         <div class="col">
-                            <div class="info-label">Total TTC</div>
-                            <div class="info-value"><strong>{{ number_format($total_ttc, 0, ',', ' ') }} FCFA</strong></div>
+                            <div class="info-label">Taxe Spécifique (TS)</div>
+                            <div class="info-value text-info"><strong>{{ number_format($total_ts, 0, ',', ' ') }} FCFA</strong></div>
                         </div>
+                        @endif
                         <div class="col">
-                            <div class="info-label">PSVBB</div>
-                            <div class="info-value"><strong>{{ number_format($total_bic, 0, ',', ' ') }} FCFA</strong></div>
+                            <div class="info-label">Total TTC Brut</div>
+                            <div class="info-value"><strong>{{ number_format($total_ttc_brut ?? ($net_commercial + $total_ts + $total_taxe), 0, ',', ' ') }} FCFA</strong></div>
                         </div>
+                        @if($total_bic > 0)
+                        <div class="col">
+                            <div class="info-label">PSVB</div>
+                            <div class="info-value text-warning"><strong>{{ number_format($total_bic, 0, ',', ' ') }} FCFA</strong></div>
+                        </div>
+                        @endif
+                        @if($total_timbre > 0)
+                        <div class="col">
+                            <div class="info-label">Timbre (espèces)</div>
+                            <div class="info-value text-secondary"><strong>{{ number_format($total_timbre, 0, ',', ' ') }} FCFA</strong></div>
+                        </div>
+                        @endif
+                        @if($montant_transport > 0)
+                        <div class="col">
+                            <div class="info-label">{{ $transport_label ?? 'Transport' }}</div>
+                            <div class="info-value"><strong>+ {{ number_format($montant_transport, 0, ',', ' ') }} FCFA</strong></div>
+                        </div>
+                        @endif
                     </div>
 
                     {{-- Détail des taux TVA / PSVBB --}}
@@ -419,23 +373,23 @@
                         <div class="row mb-3">
                             @if (!empty($tva_groups))
                                 <div class="col-md-6">
-                                    <div class="info-label mb-1">Récapitulatif TVA</div>
+                                    <div class="info-label mb-1">Récapitulatif Groupes de Taxation DGI</div>
                                     <table class="table table-sm table-bordered mb-0">
                                         <thead class="table-light">
                                             <tr>
-                                                <th>Code</th>
-                                                <th class="text-end">Base (Net comm.)</th>
+                                                <th>Groupe</th>
+                                                <th class="text-end">Base HT</th>
                                                 <th class="text-end">Taux</th>
-                                                <th class="text-end">Montant</th>
+                                                <th class="text-end">Montant TVA</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach ($tva_groups as $g)
                                                 <tr>
-                                                    <td>C{{ rtrim(rtrim(number_format($g['taux'], 2, '', ''), '0'), '.') }}</td>
-                                                    <td class="text-end">{{ number_format($g['base'], 0, ',', ' ') }}</td>
+                                                    <td><span class="badge bg-primary">Groupe {{ $g['groupe'] ?? 'B' }}</span></td>
+                                                    <td class="text-end font-monospace">{{ number_format($g['base'], 0, ',', ' ') }}</td>
                                                     <td class="text-end">{{ number_format($g['taux'], 2, ',', ' ') }} %</td>
-                                                    <td class="text-end"><strong>{{ number_format($g['taxe'], 0, ',', ' ') }}</strong></td>
+                                                    <td class="text-end font-monospace"><strong>{{ number_format($g['taxe'], 0, ',', ' ') }}</strong></td>
                                                 </tr>
                                             @endforeach
                                         </tbody>
@@ -444,7 +398,7 @@
                             @endif
                             @if (!empty($bic_groups))
                                 <div class="col-md-6">
-                                    <div class="info-label mb-1">Récapitulatif PSVBB</div>
+                                    <div class="info-label mb-1">Récapitulatif PSVB</div>
                                     <table class="table table-sm table-bordered mb-0">
                                         <thead class="table-light">
                                             <tr>
@@ -470,12 +424,27 @@
                         </div>
                     @endif
 
-                    {{-- Transport (produit TRANS) --}}
-                    @if ($total_trans > 0)
-                        <div class="row mb-3">
-                            <div class="col-md-3">
-                                <div class="info-label">Frais de transport (TRANS)</div>
-                                <div class="info-value text-warning"><strong>− {{ number_format($total_trans, 0, ',', ' ') }} FCFA</strong></div>
+                    @php
+                        $commentaires = [];
+                        if (!empty($facture->notes)) {
+                            if (str_starts_with(trim($facture->notes), '{')) {
+                                $commentaires = json_decode($facture->notes, true) ?: [];
+                            } else {
+                                $commentaires['OBS'] = $facture->notes;
+                            }
+                        }
+                    @endphp
+                    @if(!empty($commentaires))
+                        <div class="alert alert-light border mb-3">
+                            <strong class="d-block mb-1 text-primary"><i class="fas fa-comment-alt me-1"></i> Informations complémentaires FEC DGI (Commande 36h) :</strong>
+                            <div class="row">
+                                @foreach($commentaires as $k => $v)
+                                    @if(!empty(trim((string)$v)))
+                                        <div class="col-md-6 small">
+                                            <span class="text-muted fw-bold">Ligne {{ $k }} :</span> {{ $v }}
+                                        </div>
+                                    @endif
+                                @endforeach
                             </div>
                         </div>
                     @endif
@@ -483,8 +452,8 @@
                     {{-- Ligne 2 : paiements --}}
                     <div class="row mb-3">
                         <div class="col-md-3">
-                            <div class="info-label">Net à payer (TTC + PSVBB{{ $total_trans > 0 ? ' − Transport' : '' }} − Avance)</div>
-                            <div class="info-value"><strong>{{ number_format($netAPayer, 0, ',', ' ') }} FCFA</strong></div>
+                            <div class="info-label">{{ $isAvoir ? 'Net à déduire' : 'Total Net à Payer' }}</div>
+                            <div class="info-value text-primary fs-5"><strong>{{ number_format($net_a_payer, 0, ',', ' ') }} FCFA</strong></div>
                         </div>
                         <div class="col-md-3">
                             <div class="info-label">Avance (déjà payé)</div>

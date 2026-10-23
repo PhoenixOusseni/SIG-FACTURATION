@@ -7,6 +7,7 @@ use App\Models\Entete;
 use App\Models\Facture;
 use App\Models\FactureAvoir;
 use App\Models\McfCertification;
+use App\Services\Mcf\McfSerialDriver;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -14,12 +15,12 @@ use Illuminate\Support\Facades\Log;
 
 class InvoiceSigningService
 {
-    protected $client;
+    protected $driver;
     protected $validator;
 
-    public function __construct(BridgeClient $client, FiscalDataValidator $validator)
+    public function __construct(McfSerialDriver $driver, FiscalDataValidator $validator)
     {
-        $this->client = $client;
+        $this->driver = $driver;
         $this->validator = $validator;
     }
 
@@ -61,6 +62,17 @@ class InvoiceSigningService
             throw new BridgeException('Le montant de la facture doit être strictement positif (FEC 1.21).');
         }
 
+        $entete = Entete::first();
+        $ifuVendeur = strtoupper(trim((string) optional($entete)->ifu));
+        $sfeId = strtoupper(trim((string) optional($entete)->identifiant_sfe)) ?: $ifuVendeur;
+        $opId = auth()->check() ? 'OP' . str_pad((string) auth()->id(), 2, '0', STR_PAD_LEFT) : 'OP01';
+        $opNom = auth()->check() ? substr(auth()->user()->name, 0, 32) : 'Vendeur';
+
+        $commentaires = [];
+        if (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) {
+            $commentaires = json_decode($facture->notes, true) ?: [];
+        }
+
         // Keys always present (bridge sample / validators may require them even for FV).
         $payload = [
             'numero_interne' => $facture->code,
@@ -69,9 +81,14 @@ class InvoiceSigningService
             'categorie_psvb' => optional($facture->Bic)->code ?: '',
             'nature_avoir' => '',
             'reference_originale' => '',
+            'ifu_vendeur' => $ifuVendeur,
+            'sfeid' => $sfeId,
+            'operateur_id' => $opId,
+            'operateur_nom' => $opNom,
             'client' => $this->buildClient(optional($facture->Contribuable)),
             'lignes' => $lines,
             'paiements' => $this->buildPaiements($facture, $amount),
+            'commentaires' => $commentaires,
         ];
 
         $response = $this->certify($payload, $facture->code);
@@ -183,6 +200,17 @@ class InvoiceSigningService
             ?: optional(optional($original)->ModePaie)->code
             ?: 'ESP';
 
+        $entete = Entete::first();
+        $ifuVendeur = strtoupper(trim((string) optional($entete)->ifu));
+        $sfeId = strtoupper(trim((string) optional($entete)->identifiant_sfe)) ?: $ifuVendeur;
+        $opId = auth()->check() ? 'OP' . str_pad((string) auth()->id(), 2, '0', STR_PAD_LEFT) : 'OP01';
+        $opNom = auth()->check() ? substr(auth()->user()->name, 0, 32) : 'Vendeur';
+
+        $commentaires = [];
+        if (!empty($avoir->notes) && str_starts_with(trim($avoir->notes), '{')) {
+            $commentaires = json_decode($avoir->notes, true) ?: [];
+        }
+
         $payload = [
             'numero_interne' => $avoir->code,
             'type_facture' => $bridgeType,
@@ -190,12 +218,17 @@ class InvoiceSigningService
             'categorie_psvb' => optional(optional($original)->Bic)->code ?: '',
             'nature_avoir' => $nature,
             'reference_originale' => $referenceOriginale,
+            'ifu_vendeur' => $ifuVendeur,
+            'sfeid' => $sfeId,
+            'operateur_id' => $opId,
+            'operateur_nom' => $opNom,
             'client' => $this->buildClient(optional($avoir->Contribuable)),
             'lignes' => $lines,
             'paiements' => [[
                 'mode' => $paymentMode,
                 'montant' => $amount,
             ]],
+            'commentaires' => $commentaires,
         ];
 
         $response = $this->certify($payload, $avoir->code);
@@ -240,13 +273,13 @@ class InvoiceSigningService
 
     protected function certify(array $payload, string $numeroInterne): array
     {
-        Log::info('SFE certification request', [
+        Log::info('SFE certification request via native driver', [
             'numero_interne' => $numeroInterne,
             'type_facture' => $payload['type_facture'] ?? null,
             'nature_avoir' => $payload['nature_avoir'] ?? null,
         ]);
 
-        $response = $this->client->post('/api/v1/certifier', $payload);
+        $response = $this->driver->certifierPayload($payload);
 
         if (!($response['succes'] ?? false) || empty($response['signature'])) {
             $response['erreur'] = $this->friendlyBridgeError($response['erreur'] ?? null);
@@ -369,6 +402,15 @@ class InvoiceSigningService
                 throw new BridgeException('Ligne invalide : quantité et montant doivent être positifs (FEC 1.22).');
             }
 
+            $tsUnit = 0.0;
+            if ($product) {
+                if ($product->type_ts === 'POURCENTAGE' && (float) ($product->pourcentage_ts ?? 0) > 0) {
+                    $tsUnit = round(((float) $line->prix_unitaire) * ((float) $product->pourcentage_ts / 100.0), 2);
+                } else {
+                    $tsUnit = (float) ($product->montant_ts ?? 0);
+                }
+            }
+
             return [
                 'designation' => $line->designation ?: optional($product)->designation,
                 'quantite' => $qty,
@@ -376,7 +418,7 @@ class InvoiceSigningService
                 'taux_tva' => $rate,
                 'groupe_taxe' => strtoupper(optional($tax)->code ?: 'A'),
                 'type_article_dgi' => $product->famille_produit ?? 'LOCBIE',
-                'montant_ts' => (float) ($product->montant_ts ?? 0),
+                'montant_ts' => $tsUnit,
             ];
         })->values()->all();
     }
@@ -400,6 +442,15 @@ class InvoiceSigningService
                 throw new BridgeException('Ligne d\'avoir invalide : quantité et montant doivent être positifs (FEC 1.22).');
             }
 
+            $tsUnit = 0.0;
+            if ($product) {
+                if ($product->type_ts === 'POURCENTAGE' && (float) ($product->pourcentage_ts ?? 0) > 0) {
+                    $tsUnit = round(((float) $line->prix_unitaire) * ((float) $product->pourcentage_ts / 100.0), 2);
+                } else {
+                    $tsUnit = (float) ($product->montant_ts ?? 0);
+                }
+            }
+
             return [
                 'designation' => optional($product)->designation ?: 'Article',
                 'quantite' => $qty,
@@ -407,7 +458,7 @@ class InvoiceSigningService
                 'taux_tva' => $rate,
                 'groupe_taxe' => strtoupper(optional($tax)->code ?: 'A'),
                 'type_article_dgi' => optional($product)->famille_produit ?? 'LOCBIE',
-                'montant_ts' => (float) (optional($product)->montant_ts ?? 0),
+                'montant_ts' => $tsUnit,
             ];
         })->values()->all();
     }

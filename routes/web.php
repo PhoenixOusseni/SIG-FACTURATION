@@ -35,6 +35,8 @@ use App\Http\Controllers\Comptoir\TicketComptoirController;
 use App\Http\Controllers\Comptoir\ComptoirMetaController;
 use App\Http\Controllers\Comptoir\ConversionTicketController;
 use App\Http\Controllers\Comptoir\DashboardComptoirController;
+use App\Http\Controllers\RapportController;
+use App\Http\Controllers\AuditController;
 
 /*
 |--------------------------------------------------------------------------
@@ -76,6 +78,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('print_fiche_fournisseur/{id}', [FournisseurController::class, 'print'])->name('print_fiche_fournisseur');
 
     Route::resource('module_produit', ProduitController::class);
+    Route::post('module_produit/{id}/toggle-status', [ProduitController::class, 'toggleStatus'])->name('module_produit.toggle_status');
 
     Route::resource('module_tva', TvaController::class);
 
@@ -105,13 +108,20 @@ Route::middleware(['auth'])->group(function () {
     Route::get('tous_odre_facture', [FactureController::class, 'all_facture'])->name('all_facture');
     Route::get('supp_ordre_facture/{id}', [FactureController::class, 'destroy']);
     Route::get('print_ordre_facture/{id}', [FactureController::class, 'print'])->name('print_ordre_facture');
+    Route::get('print_ticket_facture/{id}', [FactureController::class, 'printTicket'])->name('print_ticket_facture');
     Route::get('print_bon_livraison/{id}', [FactureController::class, 'bon_livraison'])->name('print_bon_livraison');
+    Route::get('module_ordre_facture/{id}/json', [FactureController::class, 'getJson'])->name('module_ordre_facture.json');
+    Route::post('module_ordre_facture/{id}/recertifier', [FactureController::class, 'recertifier'])->name('module_ordre_facture.recertifier');
+    Route::post('module_ordre_facture/recertifier-erreurs', [FactureController::class, 'recertifierTout'])->name('module_ordre_facture.recertifier_tout');
+    Route::post('module_ordre_facture/{id}/marquer-imprimee', [FactureController::class, 'marquerImprimee'])->name('module_ordre_facture.marquer_imprimee');
 
     // ===== Facture Proforma =====
     Route::resource('module_facture_proforma', FactureProformaController::class)->except(['create']);
     Route::get('tous_facture_proforma', [FactureProformaController::class, 'all_facture'])->name('all_facture_proforma');
     Route::get('supp_facture_proforma/{id}', [FactureProformaController::class, 'destroy']);
     Route::get('print_facture_proforma/{id}', [FactureProformaController::class, 'print'])->name('print_facture_proforma');
+    Route::get('module_facture_proforma/{id}/json', [FactureProformaController::class, 'getJson'])->name('module_facture_proforma.json');
+    Route::post('module_facture_proforma/{id}/convertir', [FactureProformaController::class, 'convertirEnFacture'])->name('module_facture_proforma.convertir');
 
     // ===== Facture d'Avoir =====
     Route::resource('module_facture_avoir', FactureAvoirController::class)->except(['create']);
@@ -143,8 +153,21 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('gestion_service', ServiceController::class);
 
     Route::resource('gestion_entete', EnteteController::class);
+    Route::post('gestion_entete/recuperer-mcf', [EnteteController::class, 'recupererInfosMcf'])->name('entete.recuperer-mcf');
 
     //------------------ Etats et rapports ------------------//
+    Route::get('rapports', [RapportController::class, 'index'])->name('rapports.index');
+    Route::post('rapports/x', [RapportController::class, 'genererRapportX'])->name('rapports.x');
+    Route::post('rapports/z', [RapportController::class, 'genererRapportZ'])->name('rapports.z');
+    Route::post('rapports/a', [RapportController::class, 'genererRapportA'])->name('rapports.a');
+    Route::get('rapports/imprimer/{id}', [RapportController::class, 'imprimer'])->name('rapports.imprimer');
+    Route::get('rapports/bilan/imprimer', [RapportController::class, 'printBilan'])->name('rapports.bilan.imprimer');
+    Route::get('rapports/articles/imprimer', [RapportController::class, 'printArticles'])->name('rapports.articles.imprimer');
+
+    //------------------ Journal d'Audit Système & Fiscale DGI ------------------//
+    Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
+    Route::get('audit/imprimer', [AuditController::class, 'imprimer'])->name('audit.imprimer');
+
     Route::get('solde_client', [PageController::class, 'solde_client'])->name('solde_client');
     Route::get('print_solde_client', [PageController::class, 'print_solde_client'])->name('print_solde_client');
     Route::get('etat_facture_metier', [PageController::class, 'etat_facture_metier'])->name('etat_facture_metier');
@@ -172,6 +195,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('mcf', [McfController::class, 'index'])->name('mcf.index');
     Route::post('mcf/configurer', [McfController::class, 'configurer'])->name('mcf.configurer');
     Route::post('mcf/tester', [McfController::class, 'tester'])->name('mcf.tester');
+    Route::post('mcf/auto-connect', [McfController::class, 'autoConnect'])->name('mcf.auto-connect');
+    Route::post('mcf/scan-ports', [McfController::class, 'scanPorts'])->name('mcf.scan-ports');
     Route::post('mcf/rapport', [McfController::class, 'rapport'])->name('mcf.rapport');
     Route::get('sfe/status', [SfeController::class, 'status'])->name('sfe.status');
     Route::post('mcf/certifier/{facture}', [McfController::class, 'certifier'])->name('mcf.certifier');

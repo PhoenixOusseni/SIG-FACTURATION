@@ -558,7 +558,7 @@
     </style>
 </head>
 
-<body onload="window.print();">
+<body>
 
     <div class="toolbar">
         <a class="btn btn-back" href="{{ url('module_bordereau_livraison/' . $facture->id) }}">← Retour</a>

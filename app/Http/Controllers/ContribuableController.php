@@ -33,11 +33,53 @@ class ContribuableController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $typeClient = $request->input('type_client');
+        if (!$typeClient && $request->filled('categories_id')) {
+            $cat = Categorie::find($request->categories_id);
+            $typeClient = $cat ? strtoupper($cat->code) : 'CC';
+            $request->merge(['type_client' => $typeClient]);
+        }
+        if (!$typeClient) {
+            $typeClient = 'CC';
+            $request->merge(['type_client' => 'CC']);
+        }
+
+        // Pré-remplir le nom si Client Comptant laissé vide
+        if ($typeClient === 'CC' && empty($request->assujeti)) {
+            $request->merge(['assujeti' => 'CLIENT COMPTANT']);
+        }
+
+        $rules = [
+            'type_client' => 'required|in:CC,PM,PP,PC',
             'assujeti' => 'required|string|max:255',
             'categories_id' => 'required|exists:categories,id',
-            'type_client' => 'nullable|in:CC,PM,PP,PC',
             'email' => 'nullable|email|max:255',
+        ];
+
+        if ($typeClient === 'PM' || $typeClient === 'PC') {
+            $rules['ifu'] = 'required|string|max:50';
+            $rules['rccm'] = 'required|string|max:50';
+            $rules['telephone'] = 'required|string|max:50';
+            $rules['adresse'] = 'required|string|max:255';
+        } elseif ($typeClient === 'PP') {
+            $rules['telephone'] = 'required|string|max:50';
+            $rules['adresse'] = 'required|string|max:255';
+            $rules['ifu'] = 'nullable|string|max:50';
+            $rules['rccm'] = 'nullable|string|max:50';
+        } else {
+            // CC (Client Comptant)
+            $rules['ifu'] = 'nullable|string|max:50';
+            $rules['rccm'] = 'nullable|string|max:50';
+            $rules['telephone'] = 'nullable|string|max:50';
+            $rules['adresse'] = 'nullable|string|max:255';
+        }
+
+        $request->validate($rules, [
+            'assujeti.required' => 'Le nom du client / raison sociale est obligatoire.',
+            'ifu.required' => "Le numéro IFU est obligatoire pour les Personnes Morales (PM) et Commerçants (PC).",
+            'rccm.required' => "Le numéro RCCM est obligatoire pour les Personnes Morales (PM) et Commerçants (PC).",
+            'telephone.required' => "Le numéro de téléphone est obligatoire pour ce type de client.",
+            'adresse.required' => "L'adresse géographique est obligatoire pour ce type de client.",
         ]);
 
         $contribuable = Contribuable::create([
@@ -133,11 +175,48 @@ class ContribuableController extends Controller
      */
     public function update(Request $request, String $id)
     {
-        $request->validate([
+        $typeClient = $request->input('type_client');
+        if (!$typeClient && $request->filled('categories_id')) {
+            $cat = Categorie::find($request->categories_id);
+            $typeClient = $cat ? strtoupper($cat->code) : 'CC';
+            $request->merge(['type_client' => $typeClient]);
+        }
+        if (!$typeClient) {
+            $typeClient = 'CC';
+            $request->merge(['type_client' => 'CC']);
+        }
+
+        $rules = [
+            'type_client' => 'required|in:CC,PM,PP,PC',
             'assujeti' => 'required|string|max:255',
             'categories_id' => 'required|exists:categories,id',
-            'type_client' => 'nullable|in:CC,PM,PP,PC',
             'email' => 'nullable|email|max:255',
+        ];
+
+        if ($typeClient === 'PM' || $typeClient === 'PC') {
+            $rules['ifu'] = 'required|string|max:50';
+            $rules['rccm'] = 'required|string|max:50';
+            $rules['telephone'] = 'required|string|max:50';
+            $rules['adresse'] = 'required|string|max:255';
+        } elseif ($typeClient === 'PP') {
+            $rules['telephone'] = 'required|string|max:50';
+            $rules['adresse'] = 'required|string|max:255';
+            $rules['ifu'] = 'nullable|string|max:50';
+            $rules['rccm'] = 'nullable|string|max:50';
+        } else {
+            // CC (Client Comptant)
+            $rules['ifu'] = 'nullable|string|max:50';
+            $rules['rccm'] = 'nullable|string|max:50';
+            $rules['telephone'] = 'nullable|string|max:50';
+            $rules['adresse'] = 'nullable|string|max:255';
+        }
+
+        $request->validate($rules, [
+            'assujeti.required' => 'Le nom du client / raison sociale est obligatoire.',
+            'ifu.required' => "Le numéro IFU est obligatoire pour les Personnes Morales (PM) et Commerçants (PC).",
+            'rccm.required' => "Le numéro RCCM est obligatoire pour les Personnes Morales (PM) et Commerçants (PC).",
+            'telephone.required' => "Le numéro de téléphone est obligatoire pour ce type de client.",
+            'adresse.required' => "L'adresse géographique est obligatoire pour ce type de client.",
         ]);
 
         $contribuable = Contribuable::findOrFail($id);

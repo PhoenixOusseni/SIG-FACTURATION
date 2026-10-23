@@ -2,33 +2,31 @@
 
 namespace App\Console\Commands;
 
-use App\Services\SFE\BridgeClient;
+use App\Services\Mcf\McfSerialDriver;
 use App\Services\SFE\ConfigurationService;
 use App\Services\SFE\DeviceStatusService;
 use App\Services\SFE\HealthCheckService;
 use Illuminate\Console\Command;
 
 /**
- * Live smoke against the SFE Bridge REST API (manuel déploiement).
- * Does not certify invoices — only admin endpoints + payload shape dump.
+ * Smoke test du driver série natif MCF Eltrade (Norme SECeF BF ST 1.0).
  */
 class SfeSmokeTest extends Command
 {
     protected $signature = 'sfe:smoke
-                            {--payload : Dump a sample certifier payload shape (no HTTP cert call)}
+                            {--payload : Dump a sample certifier payload shape}
                             {--json : Machine-readable JSON output}';
 
-    protected $description = 'Smoke-test SFE Bridge: status, config, mcf/etat, mcf/connexion';
+    protected $description = 'Smoke-test du pilote MCF natif : status, config, mcf/etat, mcf/connexion, ports COM';
 
     public function handle(
         HealthCheckService $health,
         DeviceStatusService $device,
         ConfigurationService $configuration,
-        BridgeClient $client
+        McfSerialDriver $driver
     ): int {
         $results = [
-            'bridge_url' => rtrim((string) (optional(\App\Models\Entete::first())->sfe_bridge_url
-                ?? config('sfe.url')), '/'),
+            'pilote' => 'Driver natif PHP Eltrade CC300 (SECeF ST 1.0)',
             'checks' => [],
         ];
 
@@ -50,29 +48,24 @@ class SfeSmokeTest extends Command
             $results['checks']['health'] = ['ok' => false, 'error' => $e->getMessage()];
         }
 
-        // 2) GET /api/v1/status (raw)
-        $results['checks']['status'] = $this->tryCall(function () use ($client) {
-            return $client->get('/api/v1/status');
-        }, $ok);
-
-        // 3) GET /api/v1/config
+        // 2) Configuration
         $results['checks']['config'] = $this->tryCall(function () use ($configuration) {
-            $cfg = $configuration->get();
-            // Never echo license_key in full
-            if (isset($cfg['license_key']) && $cfg['license_key'] !== '') {
-                $cfg['license_key'] = '***';
-            }
-            return $cfg;
+            return $configuration->get();
         }, $ok);
 
-        // 4) GET /api/v1/mcf/etat
+        // 3) État machine MCF (C1h)
         $results['checks']['mcf_etat'] = $this->tryCall(function () use ($device) {
             return $device->state();
         }, $ok);
 
-        // 5) GET /api/v1/mcf/connexion
+        // 4) Connexion DGI (C2h)
         $results['checks']['mcf_connexion'] = $this->tryCall(function () use ($device) {
             return $device->connection();
+        }, $ok);
+
+        // 5) Ports COM disponibles
+        $results['checks']['ports_com'] = $this->tryCall(function () use ($device) {
+            return $device->ports();
         }, $ok);
 
         if ($this->option('payload')) {
@@ -113,37 +106,28 @@ class SfeSmokeTest extends Command
         if ($this->option('json')) {
             $this->line(json_encode($results, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         } else {
-            $this->info('SFE Bridge smoke — ' . $results['bridge_url']);
+            $this->info('Smoke-test Pilote MCF Natif — ' . $results['pilote']);
             foreach ($results['checks'] as $name => $check) {
                 $pass = $check['ok'] ?? false;
                 $this->line(sprintf(
                     '  [%s] %s %s',
-                    $pass ? 'OK' : 'FAIL',
-                    $name,
-                    $check['error'] ?? ($check['message'] ?? ($check['level'] ?? ''))
+                    $pass ? 'PASS' : 'FAIL',
+                    str_pad($name, 16),
+                    $check['error'] ?? ''
                 ));
             }
-            if ($this->option('payload')) {
-                $this->newLine();
-                $this->comment('Sample certifier payload shape (not sent):');
-                $this->line(json_encode($results['sample_certifier_payload'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-            }
-            $this->newLine();
-            $this->line($ok
-                ? 'Smoke finished: bridge reachable (device may still need config).'
-                : 'Smoke finished: bridge unreachable or misconfigured. Start sfe_bridge.exe and check URL/COM.');
         }
 
         return $ok ? 0 : 1;
     }
 
-    protected function tryCall(callable $fn, bool &$ok): array
+    protected function tryCall(callable $fn, bool &$globalOk): array
     {
         try {
             $data = $fn();
             return ['ok' => true, 'data' => $data];
         } catch (\Throwable $e) {
-            $ok = false;
+            $globalOk = false;
             return ['ok' => false, 'error' => $e->getMessage()];
         }
     }

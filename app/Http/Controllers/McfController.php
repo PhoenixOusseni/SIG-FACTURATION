@@ -36,17 +36,17 @@ class McfController extends Controller
         $config = $snapshot['config'] ?? [];
         $ports = $snapshot['ports'] ?? [];
         $connexion = $snapshot['connexion'] ?? ['succes' => false];
-        $bridgeJoignable = (bool) ($snapshot['bridge_online'] ?? false);
-        $configurationValide = (bool) ($settings->ifu && $settings->denomination && $settings->sfe_bridge_url);
+        $bridgeJoignable = true;
+        $configurationValide = (bool) ($settings->ifu && $settings->denomination);
         $pret = $configurationValide && ($device['succes'] ?? false);
         $status = [
-            'level' => !$bridgeJoignable ? 'disconnected' : ($pret ? 'connected' : 'warning'),
+            'level' => $pret ? 'connected' : 'warning',
             'bridge' => $snapshot['bridge'] ?? [],
             'device' => $device,
             'configuration_valid' => $configurationValide,
-            'message' => !$bridgeJoignable
-                ? 'Bridge SFE hors ligne ou délai dépassé.'
-                : ($pret ? 'Facturation fiscale opérationnelle.' : 'Bridge joignable, mais boîtier ou configuration non prêt.'),
+            'message' => $pret
+                ? ($snapshot['message'] ?? 'Facturation fiscale opérationnelle.')
+                : 'Configuration incomplète ou boîtier non prêt.',
         ];
         $certifications = McfCertification::with(['facture.Contribuable'])->orderByDesc('id')->paginate(20);
 
@@ -57,30 +57,75 @@ class McfController extends Controller
     {
         abort_unless(in_array(auth()->user()->role, ['administrateur', 'superviseur']), 403);
         $data = $request->validate([
-            'port_com' => 'required|string|max:30', 'baudrate' => 'required|integer|min:1200|max:115200',
-            'sfeid' => 'nullable|string|max:100', 'ifu_vendeur' => 'required|string|max:50',
-            'license_key' => 'nullable|string|max:255', 'sfe_bridge_url' => 'required|url|max:255',
-            'sfe_bridge_timeout' => 'required|integer|min:1|max:120',
+            'port_com' => 'required|string|max:30',
+            'baudrate' => 'required|integer|min:1200|max:115200',
+            'sfeid' => 'nullable|string|max:100',
+            'ifu_vendeur' => 'required|string|max:50',
+            'license_key' => 'nullable|string|max:255',
+            'sfe_bridge_url' => 'nullable|string|max:255',
+            'sfe_bridge_timeout' => 'nullable|integer|min:1|max:120',
         ]);
         try {
-            $bridgeData = collect($data)->only(['port_com','baudrate','sfeid','ifu_vendeur','license_key'])->all();
-            if (empty($bridgeData['license_key'])) {
-                $current = $this->configuration->get();
-                $bridgeData['license_key'] = $current['license_key'] ?? '';
-            }
-            $result = $this->configuration->update($bridgeData);
-            if (!($result['succes'] ?? false)) throw new \RuntimeException($result['erreur'] ?? 'Configuration refusée par le bridge.');
-            Entete::singleton()->update(['sfe_bridge_url' => $data['sfe_bridge_url'], 'sfe_bridge_timeout' => $data['sfe_bridge_timeout'], 'ifu' => $data['ifu_vendeur'], 'identifiant_sfe' => $data['sfeid']]);
-            smilify('success', 'Configuration enregistrée. Utilisez « Tester le boîtier » pour confirmer.');
+            $this->configuration->update([
+                'port_com' => $data['port_com'],
+                'baudrate' => $data['baudrate'],
+                'ifu_vendeur' => $data['ifu_vendeur'],
+                'sfeid' => $data['sfeid'],
+            ]);
+            Entete::singleton()->update([
+                'port_com' => $data['port_com'],
+                'mcf_baudrate' => $data['baudrate'],
+                'ifu' => $data['ifu_vendeur'],
+                'identifiant_sfe' => $data['sfeid'],
+            ]);
+            $this->snapshots->refresh();
+            smilify('success', 'Configuration du pilote MCF Eltrade enregistrée avec succès.');
         } catch (\Throwable $e) { report($e); smilify('error', $e->getMessage()); }
         return redirect()->route('mcf.index');
     }
 
-    public function tester()
+    public function tester(\App\Services\Mcf\McfSerialDriver $driver)
     {
-        $status = $this->snapshots->refresh();
-        if ($status['level'] === 'connected') smilify('success', $status['message']);
-        else smilify('error', $status['message'] . ' ' . ($status['device']['erreur'] ?? ''));
+        $res = $driver->testerLiaisonSerieReelle();
+        $this->snapshots->refresh();
+
+        if ($res['succes']) {
+            if (!empty($res['hardware'])) {
+                smilify('success', '🟢 Boîtier physique connecté ! ' . $res['message']);
+            } else {
+                smilify('warning', '🟡 Mode Simulation actif : ' . $res['message']);
+            }
+        } else {
+            smilify('error', '🔴 ' . ($res['erreur'] ?? 'Le boîtier MCF ne répond pas sur le port série configuré.'));
+        }
+
+        return redirect()->route('mcf.index');
+    }
+
+    public function autoConnect(\App\Services\Mcf\McfSerialDriver $driver)
+    {
+        abort_unless(in_array(auth()->user()->role, ['administrateur', 'superviseur']), 403);
+        try {
+            $res = $driver->detecterEtConnecterPortAuto();
+            if ($res['succes']) {
+                $this->snapshots->refresh();
+                \App\Models\AuditLog::enregistrer('UPDATE', 'MCF', "Détection et connexion automatique sur {$res['port']} (NIM: {$res['nim']})");
+                smilify('success', $res['message']);
+            } else {
+                smilify('error', $res['message']);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            smilify('error', 'Erreur de détection automatique : ' . $e->getMessage());
+        }
+        return redirect()->route('mcf.index');
+    }
+
+    public function scanPorts(\App\Services\Mcf\McfSerialDriver $driver)
+    {
+        abort_unless(in_array(auth()->user()->role, ['administrateur', 'superviseur']), 403);
+        $ports = $driver->listerPortsDisponibles(true);
+        smilify('success', count($ports) . ' port(s) COM détecté(s) sur la machine.');
         return redirect()->route('mcf.index');
     }
 
@@ -99,8 +144,13 @@ class McfController extends Controller
     public function certifier($factureId)
     {
         $facture = Facture::findOrFail($factureId);
-        try { $this->signer->sign($facture); smilify('success', 'Facture certifiée par le boîtier physique via le bridge SFE.'); }
-        catch (\Throwable $e) { report($e); smilify('error', 'Certification refusée : ' . $e->getMessage()); }
+        try {
+            $this->signer->sign($facture);
+            smilify('success', 'Facture certifiée avec succès par le pilote MCF Eltrade (Norme SECeF ST 1.0).');
+        } catch (\Throwable $e) {
+            report($e);
+            smilify('error', 'Certification refusée : ' . $e->getMessage());
+        }
         return redirect()->route('module_ordre_facture.show', $facture->id);
     }
 

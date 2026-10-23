@@ -1,4 +1,4 @@
-﻿@extends('layouts.master')
+@extends('layouts.master')
 
 @section('title')
     <title>SIG - CFE | Facturation</title>
@@ -66,33 +66,46 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div></div>
                         <div>
-                            <a href="{{ route('module_facture_proforma.index') }}" class="btn btn-light btn-sm">
+                            <a href="{{ route('module_facture_proforma.index') }}" class="btn btn-light btn-sm" title="Retour à la liste">
                                 <i data-feather="arrow-left"></i>
                             </a>
-                            @if ($facture->statut !== 'transformée' && !$facture->bordereau_livraison_id)
-                                <a href="{{ route('bordereau_from_proforma', $facture->id) }}" class="btn btn-info btn-sm"
-                                    onclick="return confirm('Transformer cette proforma en bordereau de livraison ?')">
-                                    <i data-feather="repeat"></i>&nbsp;Transformer en BL
+                            @if ($facture->estConvertie())
+                                <span class="badge bg-success-subtle text-success border border-success me-2 px-2 py-1">
+                                    <i class="fas fa-check-circle me-1"></i> Convertie en Facture de Vente
+                                </span>
+                                @if ($facture->Facture)
+                                    <a href="{{ route('module_ordre_facture.show', $facture->Facture->id) }}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-file-invoice me-1"></i> Voir Facture {{ $facture->Facture->code }}
+                                    </a>
+                                @endif
+                                <a href="{{ url('print_facture_proforma/' . $facture->id) }}" class="btn btn-success btn-sm"
+                                    target="_blank" title="Imprimer la Proforma">
+                                    <i data-feather="printer"></i>
                                 </a>
                             @else
-                                @if ($facture->bordereau_livraison_id)
+                                @if (!$facture->bordereau_livraison_id)
+                                    <a href="{{ route('bordereau_from_proforma', $facture->id) }}" class="btn btn-info btn-sm"
+                                        onclick="return confirm('Transformer cette proforma en bordereau de livraison ?')">
+                                        <i data-feather="repeat"></i>&nbsp;Transformer en BL
+                                    </a>
+                                @else
                                     <a href="{{ route('module_bordereau_livraison.show', $facture->bordereau_livraison_id) }}"
                                         class="btn btn-success btn-sm">
                                         <i data-feather="truck"></i> Voir le BL lié
                                     </a>
                                 @endif
+                                <a href="{{ route('module_facture_proforma.edit', $facture->id) }}" class="btn btn-warning btn-sm" title="Modifier">
+                                    <i data-feather="edit"></i>
+                                </a>
+                                <a href="{{ url('print_facture_proforma/' . $facture->id) }}" class="btn btn-success btn-sm"
+                                    target="_blank" title="Imprimer">
+                                    <i data-feather="printer"></i>
+                                </a>
+                                <a href="{{ url('supp_facture_proforma/' . $facture->id) }}" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette facture proforma ?')" title="Supprimer">
+                                    <i data-feather="trash-2"></i>
+                                </a>
                             @endif
-                            <a href="{{ route('module_facture_proforma.edit', $facture->id) }}" class="btn btn-warning btn-sm">
-                                <i data-feather="edit"></i>
-                            </a>
-                            <a href="{{ url('print_facture_proforma/' . $facture->id) }}" class="btn btn-success btn-sm"
-                                target="_blank">
-                                <i data-feather="printer"></i>
-                            </a>
-                            <a href="{{ url('supp_facture_proforma/' . $facture->id) }}" class="btn btn-danger btn-sm"
-                                onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette facture ?')">
-                                <i data-feather="trash-2"></i>
-                            </a>
                         </div>
                     </div>
                 </div>

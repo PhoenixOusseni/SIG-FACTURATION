@@ -68,23 +68,55 @@ class FactureAvoir extends Model
     }
 
     /**
-     * Montant total TTC + BIC approximatif (même logique que la facture vente).
+     * Montant total TTC + BIC de l'avoir (même logique fiscale que la facture vente).
      */
     public function getMontantTotalAttribute(): float
     {
         $total = 0.0;
-        $tauxBic = (float) optional(optional($this->Facture)->Bic)->taux;
+        $isRrr = strtoupper((string) ($this->nature_avoir ?? '')) === 'RRR';
+        $tauxBic = $isRrr ? 0.0 : (float) optional(optional($this->Facture)->Bic)->taux;
+        $elements = $this->relationLoaded('ElementFactureAvoirs')
+            ? $this->getRelation('ElementFactureAvoirs')
+            : $this->ElementFactureAvoirs()->with('Produit.tva')->get();
 
-        foreach ($this->ElementFactureAvoirs()->with('Produit.tva')->get() as $el) {
-            $montantHt = (float) $el->quantite * (float) $el->prix_unitaire;
+        foreach ($elements as $el) {
+            $quantite = (float) $el->quantite;
+            $montantHt = $quantite * (float) $el->prix_unitaire;
+            $prod = $el->Produit;
+            $tsUnit = 0.0;
+            if ($prod) {
+                if ($prod->type_ts === 'POURCENTAGE' && (float) ($prod->pourcentage_ts ?? 0) > 0) {
+                    $tsUnit = round(((float) $el->prix_unitaire) * ((float) $prod->pourcentage_ts / 100.0), 2);
+                } elseif (!$isRrr) {
+                    // Les TS fixes par unité ne s'appliquent PAS sur un avoir financier RRR (règle FEC/DGI)
+                    $tsUnit = (float) ($prod->montant_ts ?? 0);
+                }
+            }
+            $tsTotal = $tsUnit * $quantite;
+
             $tauxTva = (float) optional(optional($el->Produit)->tva)->taux;
-            $ttc = $montantHt + ($montantHt * $tauxTva / 100);
-            $bic = $ttc * $tauxBic / 100;
-            $total += $ttc + $bic;
+            $baseTva = $montantHt + $tsTotal;
+            $tva = $baseTva * $tauxTva / 100;
+            $ttc = $baseTva + $tva;
+
+            $bic = ($prod && $prod->isBien() && !$isRrr) ? ($ttc * $tauxBic / 100) : 0.0;
+            $total += ($ttc + $bic);
         }
 
         $remise = (float) ($this->remise_1 ?? 0) + (float) ($this->remise_2 ?? 0);
 
         return round(max(0, $total - $remise), 2);
+    }
+
+    /**
+     * Message d'erreur de certification éventuel.
+     */
+    public function getSfeErrorAttribute(): ?string
+    {
+        if (!empty($this->notes) && str_starts_with(trim($this->notes), '{')) {
+            $data = json_decode($this->notes, true);
+            return $data['sfe_error'] ?? null;
+        }
+        return null;
     }
 }

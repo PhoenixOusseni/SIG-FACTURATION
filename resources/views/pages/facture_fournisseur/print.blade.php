@@ -606,7 +606,7 @@
     </style>
 </head>
 
-<body onload="window.print();">
+<body>
 
     <div class="toolbar">
         <a class="btn btn-back" href="{{ url('module_facture_fournisseur/' . $facture->id) }}">← Retour</a>

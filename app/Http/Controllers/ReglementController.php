@@ -178,8 +178,8 @@ class ReglementController extends Controller
         $entete = Entete::first();
         $facture = $reglement->Facture;
 
-        // Conversion en lettres (FR) — simple
-        $montantLettres = $this->numberToFrenchWords((int) round($reglement->montant)) . ' francs CFA';
+        // Conversion en lettres (FR) — montant absolu
+        $montantLettres = $this->numberToFrenchWords((int) round(abs($reglement->montant))) . ' francs CFA';
 
         return view('pages.reglement.print_reglement', compact('reglement', 'facture', 'entete', 'montantLettres'));
     }

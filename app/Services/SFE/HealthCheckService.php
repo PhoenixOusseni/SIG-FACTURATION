@@ -6,28 +6,36 @@ use App\Models\Entete;
 
 class HealthCheckService
 {
-    protected $client;
-    protected $device;
+    protected DeviceStatusService $device;
 
-    public function __construct(BridgeClient $client, DeviceStatusService $device)
+    public function __construct(DeviceStatusService $device)
     {
-        $this->client = $client;
         $this->device = $device;
     }
 
     public function check(): array
     {
         try {
-            $bridge = $this->client->get('/api/v1/status');
             $device = $this->device->state();
-            $settings = Entete::first();
-            $valid = $settings && $settings->ifu && $settings->denomination && $settings->sfe_bridge_url;
+            $settings = Entete::singleton();
+            $valid = $settings && $settings->ifu && $settings->denomination;
             $ready = $valid && ($device['succes'] ?? false);
-            return ['level' => $ready ? 'connected' : 'warning', 'bridge' => $bridge, 'device' => $device,
+
+            return [
+                'level'               => $ready ? 'connected' : 'warning',
+                'bridge'              => ['status' => 'Driver MCF Natif PHP opérationnel', 'version' => '1.0'],
+                'device'              => $device,
                 'configuration_valid' => (bool) $valid,
-                'message' => $ready ? 'Facturation fiscale opérationnelle.' : 'Bridge joignable, mais boîtier ou configuration non prêt.'];
+                'message'             => $ready
+                    ? 'Facturation fiscale opérationnelle.'
+                    : 'Configuration ou état du boîtier incomplet.',
+            ];
         } catch (\Throwable $e) {
-            return ['level' => 'disconnected', 'configuration_valid' => false, 'message' => $e->getMessage()];
+            return [
+                'level'               => 'warning',
+                'configuration_valid' => false,
+                'message'             => $e->getMessage(),
+            ];
         }
     }
 }

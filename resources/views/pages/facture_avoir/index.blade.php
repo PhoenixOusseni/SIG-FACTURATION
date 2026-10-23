@@ -163,7 +163,7 @@
                                     <div class="row mb-3">
                                         <div class="col-lg-6 col-md-12">
                                             <div class="form-group">
-                                                <label class="small">Facture d'origine <span
+                                                <label class="small fw-bold">Facture d'origine <span
                                                         class="text-danger">*</span></label>
                                                 <select name="facture_id" id="facture_id"
                                                     class="form-select select2-input" required style="width:100%">
@@ -202,59 +202,96 @@
                                         </div>
                                     </div>
 
+                                    {{-- Carte de rappel synthétique de la Facture d'origine --}}
+                                    <div id="avoirOrigineDetailsCard" class="card border-primary bg-light mb-3" style="display:none;">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="card-title text-primary fw-bold mb-0">
+                                                    <i class="fas fa-file-invoice me-1"></i> Synthèse Facture d'Origine : <span id="cardOrigineRef"></span>
+                                                </h6>
+                                                <span id="cardOrigineStatut" class="badge bg-secondary"></span>
+                                            </div>
+                                            <div class="row g-2 small">
+                                                <div class="col-md-2"><strong>Client :</strong> <span id="cardOrigineClientNom">-</span></div>
+                                                <div class="col-md-2"><strong>IFU :</strong> <span id="cardOrigineClientIfu">-</span></div>
+                                                <div class="col-md-2"><strong>Total Facture :</strong> <span id="cardOrigineMontant" class="fw-bold text-dark">-</span></div>
+                                                <div class="col-md-2"><strong>Déjà Réglé :</strong> <span id="cardOriginePaye" class="fw-bold text-info">-</span></div>
+                                                <div class="col-md-2"><strong>Reste Dû :</strong> <span id="cardOrigineReste" class="fw-bold text-danger">-</span></div>
+                                                <div class="col-md-2"><strong>Solde Avoir :</strong> <span id="cardOrigineSoldeDispo" class="badge bg-success fs-6">-</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div class="row mb-3">
-                                        <div class="col-lg-4 col-md-12">
+                                        <div class="col-lg-6 col-md-12">
                                             <div class="form-group">
-                                                <label class="small">Motif de l'avoir <span
+                                                <label class="small fw-bold">Nature / Motif de l'avoir (Norme FEC DGI) <span
                                                         class="text-danger">*</span></label>
-                                                <select name="motif" id="motif_avoir" class="form-select" required>
-                                                    <option value="">Sélectionner le motif</option>
-                                                    <option value="retour"
-                                                        {{ old('motif') == 'retour' ? 'selected' : '' }}>Retour de
-                                                        marchandise → RAM</option>
-                                                    <option value="erreur"
-                                                        {{ old('motif') == 'erreur' ? 'selected' : '' }}>Erreur sur la
-                                                        facture → COR</option>
-                                                    <option value="annulation"
-                                                        {{ old('motif') == 'annulation' ? 'selected' : '' }}>Annulation
-                                                        de vente → RAN</option>
-                                                    <option value="remise"
-                                                        {{ old('motif') == 'remise' ? 'selected' : '' }}>Remise/Rabais
-                                                        accordé → RRR</option>
-                                                    <option value="produit_defectueux"
-                                                        {{ old('motif') == 'produit_defectueux' ? 'selected' : '' }}>
-                                                        Produit défectueux → RAM</option>
+                                                <input type="hidden" name="motif" id="motif_avoir" value="{{ old('motif', 'annulation') }}">
+                                                <select name="nature_avoir" id="nature_avoir" class="form-select border-primary"
+                                                    required onchange="onNatureAvoirChange(this.value)">
+                                                    <option value="RAN" {{ old('nature_avoir', 'RAN') == 'RAN' ? 'selected' : '' }}>
+                                                        RAN — Annulation totale de la vente (100% de la facture)
+                                                    </option>
+                                                    <option value="RAM" {{ old('nature_avoir') == 'RAM' ? 'selected' : '' }}>
+                                                        RAM — Retour de marchandises (réintégration en stock)
+                                                    </option>
+                                                    <option value="COR" {{ old('nature_avoir') == 'COR' ? 'selected' : '' }}>
+                                                        COR — Correction d'erreur matérielle (ajustement prix/qté)
+                                                    </option>
+                                                    <option value="RRR" {{ old('nature_avoir') == 'RRR' ? 'selected' : '' }}>
+                                                        RRR — Remise / rabais / ristourne accordé (sans mouvement de stock)
+                                                    </option>
                                                 </select>
+                                                <div id="natureAvoirAlert" class="form-text mt-1 text-primary"></div>
                                             </div>
                                         </div>
-                                        <div class="col-lg-4 col-md-12">
+                                        <div class="col-lg-6 col-md-12">
                                             <div class="form-group">
-                                                <label class="small">Nature DGI (FEC 1.25) <span
-                                                        class="text-danger">*</span></label>
-                                                <select name="nature_avoir" id="nature_avoir" class="form-select"
-                                                    required>
-                                                    <option value="">Sélectionner</option>
-                                                    <option value="COR"
-                                                        {{ old('nature_avoir') == 'COR' ? 'selected' : '' }}>COR —
-                                                        Correction</option>
-                                                    <option value="RAN"
-                                                        {{ old('nature_avoir') == 'RAN' ? 'selected' : '' }}>RAN —
-                                                        Annulation</option>
-                                                    <option value="RAM"
-                                                        {{ old('nature_avoir') == 'RAM' ? 'selected' : '' }}>RAM —
-                                                        Reprise biens/services</option>
-                                                    <option value="RRR"
-                                                        {{ old('nature_avoir') == 'RRR' ? 'selected' : '' }}>RRR —
-                                                        Remise / ristourne / rabais</option>
-                                                </select>
-                                                <small class="text-muted">Prérempli selon le motif ; modifiable.</small>
+                                                <label class="small">Objet / Précisions</label>
+                                                <input type="text" class="form-control" name="objet" id="avoir_objet"
+                                                    value="{{ old('objet') }}" placeholder="Précisez la raison ou le contexte de l'avoir..." />
                                             </div>
                                         </div>
-                                        <div class="col-lg-4 col-md-12">
-                                            <div class="form-group">
-                                                <label class="small">Objet</label>
-                                                <input type="text" class="form-control" name="objet"
-                                                    value="{{ old('objet') }}" placeholder="Objet" />
+                                    </div>
+
+                                    {{-- Contrôles Avancés RRR (Rabais, Remise, Ristourne) --}}
+                                    <div id="mainAvoirRrrControls" class="card border-info bg-light-subtle mb-3 shadow-sm" style="display: none;">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="card-title text-info fw-bold mb-0">
+                                                    <i class="fas fa-tags me-1"></i> Paramétrage de la Remise Financière (RRR)
+                                                </h6>
+                                                <span class="badge bg-info-subtle text-info border border-info">Aucun mouvement de stock · PSVB = 0</span>
+                                            </div>
+                                            <div class="row g-2 align-items-end">
+                                                <div class="col-md-3">
+                                                    <label class="form-label small fw-semibold">Nature de la réduction</label>
+                                                    <select id="main_rrr_type" class="form-select form-select-sm">
+                                                        <option value="Remise commerciale">Remise commerciale</option>
+                                                        <option value="Rabais">Rabais (défaut de conformité)</option>
+                                                        <option value="Ristourne">Ristourne (volume périodique)</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label small fw-semibold">Unité de calcul</label>
+                                                    <select id="main_rrr_unite" class="form-select form-select-sm" onchange="onMainRrrUnitChange()">
+                                                        <option value="pourcentage">Pourcentage (%)</option>
+                                                        <option value="montant">Montant fixe (FCFA)</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label small fw-semibold" id="main_rrr_val_label">Valeur (%)</label>
+                                                    <input type="number" step="any" min="0" id="main_rrr_val" class="form-control form-control-sm font-monospace fw-bold" placeholder="Ex: 10">
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <button type="button" class="btn btn-sm btn-info text-white w-100 fw-bold" onclick="appliquerMainRemiseGlobaleAvoir()">
+                                                        <i class="fas fa-magic me-1"></i> Appliquer à la facture
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="form-text mt-1 text-muted" style="font-size: 11px;">
+                                                <i class="fas fa-shield-alt text-success me-1"></i> Règle fiscale FEC/DGI : Pas de taxe PSVB, taxes spécifiques forfaitaires exclues, recalcul proportionnel de la TVA.
                                             </div>
                                         </div>
                                     </div>
@@ -366,6 +403,46 @@
                                         <i data-feather="plus-circle" style="width:16px;height:16px;"></i> Ajouter une
                                         ligne
                                     </button>
+
+                                    {{-- Section Trésorerie & Décaissement --}}
+                                    <div class="card border-0 shadow-sm mt-4" id="mainAvoirTreasuryCard" style="border-radius: 8px; border: 1px solid #e2e8f0 !important;">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex align-items-center gap-2 mb-2">
+                                                <i class="fas fa-coins text-warning fs-5"></i>
+                                                <h6 class="mb-0 fw-bold text-dark">Impact Trésorerie & Règlement Client</h6>
+                                            </div>
+                                            <div id="mainAvoirTreasuryNotice" class="alert alert-light border small mb-0">
+                                                Sélectionnez une facture d'origine pour afficher l'analyse financière.
+                                            </div>
+                                            <div id="mainAvoirRefundSection" class="mt-3 pt-3 border-top" style="display: none;">
+                                                <div class="form-check form-switch mb-2">
+                                                    <input class="form-check-input" type="checkbox" name="effectuer_remboursement" id="main_effectuer_remboursement" value="1" onchange="toggleMainAvoirRefund(this.checked)">
+                                                    <label class="form-check-label fw-bold text-danger" for="main_effectuer_remboursement">
+                                                        <i class="fas fa-hand-holding-usd me-1"></i> Rembourser immédiatement le client (Décaissement Caisse / Banque)
+                                                    </label>
+                                                </div>
+                                                <div id="mainAvoirRefundFields" style="display: none;" class="row g-2 mt-2 p-2 bg-light rounded border">
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-semibold">Mode de Décaissement</label>
+                                                        <select name="remboursement_mode" id="main_remboursement_mode" class="form-select form-select-sm">
+                                                            <option value="Espèces" selected>Espèces (Caisse)</option>
+                                                            <option value="Chèque">Chèque</option>
+                                                            <option value="Virement Bancaire">Virement Bancaire</option>
+                                                            <option value="Mobile Money">Mobile Money</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-semibold">Montant Décaissé (FCFA)</label>
+                                                        <input type="number" step="1" min="1" name="remboursement_montant" id="main_remboursement_montant" class="form-control form-control-sm font-monospace fw-bold text-danger">
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-semibold">Réf. Transaction / Reçu</label>
+                                                        <input type="text" name="remboursement_ref" id="main_remboursement_ref" class="form-control form-control-sm" placeholder="Ex: Décaissement Caisse...">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </fieldset>
                             </form>
                         </div>
@@ -417,15 +494,262 @@
             });
         }
 
+        function onNatureAvoirChange(val) {
+            const $motif = $('#motif_avoir');
+            const $alert = $('#natureAvoirAlert');
+            const $addRowBtn = $('#addRowBtn');
+            const $removeBtns = $('.btn-remove-row, .removeRowBtn');
+            const $qtyInputs = $('.qte-input');
+            const $prixInputs = $('.prix-input');
+
+            if (val === 'RAN') {
+                $motif.val('annulation');
+                $alert.html('<i class="fas fa-lock me-1 text-danger"></i> <strong>Annulation totale (RAN)</strong> : La facture est reprise à 100%. Quantités et montants verrouillés.').removeClass('text-primary text-info text-success').addClass('text-danger');
+                $addRowBtn.prop('disabled', true).hide();
+                $removeBtns.prop('disabled', true).hide();
+                $qtyInputs.prop('readonly', true).addClass('bg-light');
+                $prixInputs.prop('readonly', true).addClass('bg-light');
+                $('#mainAvoirRrrControls').slideUp();
+            } else if (val === 'RAM') {
+                $motif.val('retour');
+                $alert.html('<i class="fas fa-boxes me-1 text-primary"></i> <strong>Retour marchandises (RAM)</strong> : Spécifiez les quantités restituées. Les biens physiques seront réintégrés en stock.').removeClass('text-danger text-info text-success').addClass('text-primary');
+                $addRowBtn.prop('disabled', false).show();
+                $removeBtns.prop('disabled', false).show();
+                $qtyInputs.prop('readonly', false).removeClass('bg-light');
+                $prixInputs.prop('readonly', false).removeClass('bg-light');
+                $('#mainAvoirRrrControls').slideUp();
+            } else if (val === 'COR') {
+                $motif.val('erreur');
+                $alert.html('<i class="fas fa-edit me-1 text-info"></i> <strong>Correction d\'erreur (COR)</strong> : Ajustez les lignes ou montants erronés.').removeClass('text-danger text-primary text-success').addClass('text-info');
+                $addRowBtn.prop('disabled', false).show();
+                $removeBtns.prop('disabled', false).show();
+                $qtyInputs.prop('readonly', false).removeClass('bg-light');
+                $prixInputs.prop('readonly', false).removeClass('bg-light');
+                $('#mainAvoirRrrControls').slideUp();
+            } else if (val === 'RRR') {
+                $motif.val('remise');
+                $alert.html('<i class="fas fa-percent me-1 text-success"></i> <strong>Rabais / Remise / Ristourne (RRR)</strong> : Avoir financier accordé sans mouvement de stock, PSVB = 0, TS fixes exclues.').removeClass('text-danger text-primary text-info').addClass('text-success');
+                $addRowBtn.prop('disabled', true).hide();
+                $removeBtns.prop('disabled', true).hide();
+                $qtyInputs.prop('readonly', true).addClass('bg-light');
+                $prixInputs.prop('readonly', false).removeClass('bg-light');
+                $('#mainAvoirRrrControls').slideDown();
+            } else {
+                $motif.val('annulation');
+                $alert.text('');
+                $addRowBtn.prop('disabled', false).show();
+                $removeBtns.prop('disabled', false).show();
+                $qtyInputs.prop('readonly', false).removeClass('bg-light');
+                $prixInputs.prop('readonly', false).removeClass('bg-light');
+                $('#mainAvoirRrrControls').slideUp();
+            }
+            evaluateMainAvoirTreasury();
+        }
+
+        function onMainRrrUnitChange() {
+            const u = $('#main_rrr_unite').val();
+            if (u === 'pourcentage') {
+                $('#main_rrr_val_label').text('Valeur (%)');
+                $('#main_rrr_val').attr('placeholder', 'Ex: 10').attr('max', 100);
+            } else {
+                $('#main_rrr_val_label').text('Valeur (FCFA)');
+                $('#main_rrr_val').attr('placeholder', 'Ex: 5000').removeAttr('max');
+            }
+        }
+
+        function appliquerMainRemiseGlobaleAvoir() {
+            const fId = $('#facture_id').val();
+            const fact = facturesData[fId];
+            if (!fact || !fact.lignes || fact.lignes.length === 0) {
+                alert("Veuillez sélectionner une facture d'origine valide.");
+                return;
+            }
+            const unit = $('#main_rrr_unite').val();
+            const val = parseFloat($('#main_rrr_val').val()) || 0;
+            if (val <= 0) {
+                alert("Veuillez saisir une valeur supérieure à 0.");
+                return;
+            }
+
+            let pct = 0;
+            const totalOrigHt = fact.lignes.reduce((acc, l) => acc + (parseFloat(l.quantite) * parseFloat(l.prix_unitaire)), 0);
+
+            if (unit === 'pourcentage') {
+                pct = Math.min(100, val);
+            } else {
+                pct = totalOrigHt > 0 ? Math.min(100, (val / totalOrigHt) * 100) : 0;
+            }
+
+            $('#elementsContainer .element-row').each(function(idx) {
+                const origLigne = fact.lignes[idx];
+                if (origLigne) {
+                    const origPu = parseFloat(origLigne.prix_unitaire) || 0;
+                    const rabaisPu = Math.round((origPu * (pct / 100)) * 100) / 100;
+                    $(this).find('.prix-input').val(rabaisPu).trigger('input');
+                    $(this).find('.qte-input').val(origLigne.quantite).prop('readonly', true).addClass('bg-light');
+                }
+            });
+
+            setTimeout(evaluateMainAvoirTreasury, 150);
+        }
+
+        function calculateFiscalTotalForMainAvoir() {
+            const nature = $('#nature_avoir').val();
+            const fId = $('#facture_id').val();
+            const fact = facturesData[fId];
+            if (!fact) return 0;
+
+            if (nature === 'RAN') {
+                return parseFloat(fact.total_facture) || 0;
+            }
+
+            const isRrr = (nature === 'RRR');
+            const tauxBic = isRrr ? 0 : (parseFloat(fact.taux_bic) || 0);
+
+            let totalHt = 0;
+            let totalTs = 0;
+            let totalTva = 0;
+            let totalBic = 0;
+
+            $('#elementsContainer .element-row').each(function() {
+                const prodId = $(this).find('select[name="produits_id[]"]').val();
+                const qte = parseFloat($(this).find('.qte-input').val()) || 0;
+                const pu = parseFloat($(this).find('.prix-input').val()) || 0;
+                const prod = produitsData[prodId];
+                if (!prod || qte <= 0) return;
+
+                const ligneHt = qte * pu;
+                totalHt += ligneHt;
+
+                let tsUnit = 0;
+                if (prod.type_ts === 'POURCENTAGE' && prod.pourcentage_ts > 0) {
+                    tsUnit = Math.round((pu * (prod.pourcentage_ts / 100)) * 100) / 100;
+                } else if (!isRrr && prod.montant_ts > 0) {
+                    tsUnit = prod.montant_ts;
+                }
+                const ligneTs = Math.round((tsUnit * qte) * 100) / 100;
+                totalTs += ligneTs;
+
+                const baseTva = ligneHt + ligneTs;
+                const ligneTva = Math.round((baseTva * (prod.taux_tva / 100)) * 100) / 100;
+                totalTva += ligneTva;
+
+                const ligneTtc = baseTva + ligneTva;
+                if (prod.is_bien && tauxBic > 0 && !isRrr) {
+                    totalBic += Math.round((ligneTtc * (tauxBic / 100)) * 100) / 100;
+                }
+            });
+
+            const remise1 = parseFloat($('input[name=remise_1]').val()) || 0;
+            const remise2 = parseFloat($('input[name=remise_2]').val()) || 0;
+            const netCom = Math.max(0, totalHt - remise1 - remise2);
+            const ratio = totalHt > 0 ? (netCom / totalHt) : 1;
+
+            const totalFinal = (totalHt * ratio) + totalTs + totalTva + totalBic;
+            return Math.round(totalFinal);
+        }
+
+        let activeFacturePaye = 0;
+        let activeFactureReste = 0;
+        let activeFactureTotal = 0;
+
+        function evaluateMainAvoirTreasury() {
+            const totalAvoir = calculateFiscalTotalForMainAvoir();
+            const paye = activeFacturePaye;
+            const reste = activeFactureReste;
+
+            if (!activeFactureTotal) {
+                $('#mainAvoirTreasuryNotice').html('Sélectionnez une facture d\'origine pour afficher l\'analyse financière.').removeClass('alert-warning alert-info').addClass('alert-light');
+                $('#mainAvoirRefundSection').hide();
+                $('#main_effectuer_remboursement').prop('checked', false);
+                $('#mainAvoirRefundFields').hide();
+                return;
+            }
+
+            if (paye <= 0.009) {
+                $('#mainAvoirTreasuryNotice').html(`
+                    <div class="d-flex align-items-center text-muted">
+                        <i class="fas fa-info-circle me-2 fs-5 text-secondary"></i>
+                        <div><strong>Créance non encaissée :</strong> Le client n'avait versé aucun paiement (0 FCFA). Cet avoir annule ou diminue simplement la créance due par le client. <strong>Aucun mouvement de caisse ni décaissement requis.</strong></div>
+                    </div>
+                `).removeClass('alert-warning alert-info').addClass('alert-light');
+                $('#mainAvoirRefundSection').hide();
+                $('#main_effectuer_remboursement').prop('checked', false);
+                $('#mainAvoirRefundFields').hide();
+            } else if (totalAvoir <= (reste + 0.009)) {
+                const nouvReste = Math.max(0, reste - totalAvoir);
+                $('#mainAvoirTreasuryNotice').html(`
+                    <div class="d-flex align-items-center text-info">
+                        <i class="fas fa-info-circle me-2 fs-5"></i>
+                        <div><strong>Absorption sur créance :</strong> L'avoir (${new Intl.NumberFormat('fr-FR').format(totalAvoir)} F) est inférieur au reste dû (${new Intl.NumberFormat('fr-FR').format(reste)} F). Le nouveau reste à payer sera de <strong>${new Intl.NumberFormat('fr-FR').format(nouvReste)} FCFA</strong>. Aucun remboursement immédiat nécessaire.</div>
+                    </div>
+                `).removeClass('alert-warning alert-light').addClass('alert-info');
+                $('#mainAvoirRefundSection').hide();
+                $('#main_effectuer_remboursement').prop('checked', false);
+                $('#mainAvoirRefundFields').hide();
+            } else {
+                const soldeClient = Math.min(paye, Math.max(0, totalAvoir - reste));
+                $('#mainAvoirTreasuryNotice').html(`
+                    <div class="d-flex align-items-center text-primary-emphasis">
+                        <i class="fas fa-wallet me-2 fs-5 text-primary"></i>
+                        <div>
+                            <strong>Solde en faveur du client : ${new Intl.NumberFormat('fr-FR').format(soldeClient)} FCFA.</strong><br>
+                            La facture d'origine ayant déjà été réglée (${new Intl.NumberFormat('fr-FR').format(paye)} F), cet avoir dégage un crédit de <strong>${new Intl.NumberFormat('fr-FR').format(soldeClient)} FCFA</strong> en faveur du client.<br>
+                            <span class="text-muted" style="font-size: 11px;">
+                                <i class="fas fa-info-circle me-1"></i> Par défaut, ce montant est conservé en compte client pour ses futurs achats. Vous pouvez activer l'option ci-dessous pour effectuer un remboursement immédiat.
+                            </span>
+                        </div>
+                    </div>
+                `).removeClass('alert-light alert-info alert-warning').addClass('alert-primary');
+                $('#mainAvoirRefundSection').slideDown();
+                // Décoché par défaut : l'avoir est conservé en compte client sauf demande expresse
+                $('#main_effectuer_remboursement').prop('checked', false);
+                $('#mainAvoirRefundFields').hide();
+                $('#main_remboursement_montant').val(Math.round(soldeClient)).attr('max', Math.round(soldeClient));
+                $('#main_remboursement_ref').val('Remboursement suite à Avoir sur ' + $('#cardOrigineRef').text());
+            }
+        }
+
+        function toggleMainAvoirRefund(checked) {
+            if (checked) {
+                $('#mainAvoirRefundFields').slideDown();
+            } else {
+                $('#mainAvoirRefundFields').slideUp();
+            }
+        }
+
         function loadFactureDetails(factureId) {
             const data = facturesData[factureId];
             if (data) {
-                $('input[name=reference]').val(data.reference || '');
+                activeFactureTotal = parseFloat(data.total_facture) || 0;
+                activeFacturePaye = parseFloat(data.montant_paye) || 0;
+                activeFactureReste = parseFloat(data.reste_a_payer) || 0;
+
+                $('#cardOrigineRef').text(data.code || ('#' + data.id));
+                $('#cardOrigineStatut').text(data.statut_paiement || 'Non payée');
+                $('#cardOrigineClientNom').text(data.client_name || data.client_nom || 'Client');
+                $('#cardOrigineClientIfu').text(data.client_ifu || 'Non renseigné');
+                $('#cardOrigineMontant').text(new Intl.NumberFormat('fr-FR').format(data.total_facture || 0) + ' XOF');
+                $('#cardOriginePaye').text(new Intl.NumberFormat('fr-FR').format(data.montant_paye || 0) + ' XOF');
+                $('#cardOrigineReste').text(new Intl.NumberFormat('fr-FR').format(data.reste_a_payer || 0) + ' XOF');
+                $('#cardOrigineSoldeDispo').text(new Intl.NumberFormat('fr-FR').format(data.solde_disponible || 0) + ' XOF');
+                $('#avoirOrigineDetailsCard').slideDown();
+
+                $('input[name=reference]').val(data.reference || ('Facture ' + data.code));
                 $('input[name=remise_1]').val(data.remise_1 || 0);
                 $('input[name=remise_2]').val(data.remise_2 || 0);
                 InvoiceLines.replaceRows(data.lignes || []);
                 $('select[name="contribuables_id"]').val(data.client_id).trigger('change');
-                $('input[name="objet"]').val(data.objet || '');
+                $('input[name="objet"]').val('Avoir sur facture ' + data.code + (data.objet ? ' - ' + data.objet : ''));
+
+                onNatureAvoirChange($('#nature_avoir').val());
+                setTimeout(evaluateMainAvoirTreasury, 150);
+            } else {
+                activeFactureTotal = 0;
+                activeFacturePaye = 0;
+                activeFactureReste = 0;
+                $('#avoirOrigineDetailsCard').slideUp();
+                evaluateMainAvoirTreasury();
             }
         }
 
@@ -458,27 +782,20 @@
                 initModalSelect2(this);
                 InvoiceLines.initSelect2($(this).find('.base-taxable-select'));
                 if (typeof feather !== 'undefined') feather.replace();
+                onNatureAvoirChange($('#nature_avoir').val());
             });
 
             $(document).on('change', 'select[name="facture_id"]', function() {
                 const factureId = $(this).val();
                 if (factureId) {
                     loadFactureDetails(factureId);
+                } else {
+                    $('#avoirOrigineDetailsCard').slideUp();
                 }
             });
 
-            var motifToNature = {
-                erreur: 'COR',
-                annulation: 'RAN',
-                retour: 'RAM',
-                produit_defectueux: 'RAM',
-                remise: 'RRR'
-            };
-            $('#motif_avoir').on('change', function() {
-                var n = motifToNature[$(this).val()];
-                if (n) {
-                    $('#nature_avoir').val(n);
-                }
+            $(document).on('input change', '#elementsContainer input, #elementsContainer select, #addRowBtn, .removeRowBtn', function() {
+                setTimeout(evaluateMainAvoirTreasury, 100);
             });
 
             $('.modal-quick-create').on('show.bs.modal', function() {

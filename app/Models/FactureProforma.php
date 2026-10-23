@@ -49,6 +49,21 @@ class FactureProforma extends Model
         return $this->hasMany(BordereauLivraison::class, 'facture_proforma_id');
     }
 
+    public function Facture()
+    {
+        return $this->hasOne(Facture::class, 'facture_proforma_id');
+    }
+
+    /**
+     * Détermine si le devis/proforma est déjà converti en facture.
+     */
+    public function estConvertie(): bool
+    {
+        return in_array(strtolower((string) $this->statut), ['transformée', 'facturé', 'facture', 'convertie'], true)
+            || !is_null($this->facture_id)
+            || ($this->relationLoaded('Facture') ? !is_null($this->getRelation('Facture')) : $this->Facture()->exists());
+    }
+
     /**
      * Montant total TTC + BIC de la facture proforma (somme des éléments).
      */

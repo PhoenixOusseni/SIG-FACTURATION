@@ -1,7 +1,7 @@
-﻿@extends('layouts.master')
+@extends('layouts.master')
 
 @section('title')
-    <title>SIG - CFE | Détails PSVBB</title>
+    <title>SIG - CFE | Détails PSVB</title>
 @endsection
 
 @section('style')
@@ -10,11 +10,11 @@
 
 @section('content')
     <main>
-        <x-page-header icon="trending-up" title="Détails du PSVBB"></x-page-header>
+        <x-page-header icon="trending-up" title="Détails de la catégorie PSVB"></x-page-header>
 
         <div class="container-xl px-4 mt-n10">
 
-            <!-- Informations PSVBB -->
+            <!-- Informations PSVB -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span>
@@ -83,7 +83,7 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="editModalLabel{{ $item->id }}">Modifier le PSVBB</h5>
+                        <h5 class="modal-title" id="editModalLabel{{ $item->id }}">Modifier la catégorie PSVB</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">X</button>
                     </div>
                     <div class="modal-body">
