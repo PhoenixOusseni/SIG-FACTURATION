@@ -218,10 +218,18 @@ class FactureAvoirController extends Controller
             if ($request->filled('notes_libres')) {
                 $notesData['notes_libres'] = trim($request->input('notes_libres'));
             }
+            if ($request->filled('rrr_sous_type')) {
+                $notesData['rrr_sous_type'] = trim($request->input('rrr_sous_type'));
+            }
             $notesJson = !empty($notesData) ? json_encode($notesData, JSON_UNESCAPED_UNICODE) : null;
 
             $remise1 = $request->filled('remise_1') ? (float) $request->remise_1 : (float) ($factureOrigine->remise_1 ?? 0);
             $remise2 = $request->filled('remise_2') ? (float) $request->remise_2 : (float) ($factureOrigine->remise_2 ?? 0);
+
+            $motifFinal = $request->motif ?? $nature;
+            if ($nature === 'RRR' && $request->filled('rrr_sous_type')) {
+                $motifFinal = trim($request->input('rrr_sous_type'));
+            }
 
             $facture_avoir = FactureAvoir::create([
                 'code'             => $generatedCode,
@@ -232,7 +240,7 @@ class FactureAvoirController extends Controller
                 'contribuables_id' => $request->contribuables_id,
                 'facture_id'       => $request->facture_id,
                 'objet'            => $request->objet,
-                'motif'            => $request->motif ?? $nature,
+                'motif'            => $motifFinal,
                 'nature_avoir'     => $nature,
                 'remise_1'         => $remise1,
                 'remise_2'         => $remise2,
@@ -336,20 +344,7 @@ class FactureAvoirController extends Controller
      */
     public function show($id)
     {
-        $facture_avoir = FactureAvoir::with(['Contribuable', 'Facture', 'User'])->findOrFail($id);
-        $elements = ElementFactureAvoir::with(['Produit.tva'])
-            ->where('facture_avoir_id', $facture_avoir->id)
-            ->get();
-
-        $montant_total = $elements->sum(function ($element) {
-            return $element->montant_total ?? ($element->quantite * $element->prix_unitaire);
-        });
-
-        $factures = Facture::orderByDesc('id')->get();
-        $contribuables = Contribuable::orderBy('assujeti')->get();
-        $produits = Produit::orderBy('code')->get();
-
-        return view('pages.facture_avoir.show', compact('facture_avoir', 'elements', 'montant_total', 'factures', 'contribuables', 'produits'));
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -428,7 +423,7 @@ class FactureAvoirController extends Controller
             smilify('success', 'Facture d\'avoir mise à jour avec succès.');
         }
 
-        return redirect()->route('module_facture_avoir.show', $facture_avoir->id);
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -442,7 +437,7 @@ class FactureAvoirController extends Controller
             if (function_exists('smilify')) {
                 smilify('error', 'Avoir fiscalisé : suppression interdite.');
             }
-            return redirect()->route('module_facture_avoir.show', $facture_avoir->id);
+            return redirect()->route('module_ordre_facture.index');
         }
 
         DB::transaction(function () use ($facture_avoir) {
@@ -454,7 +449,7 @@ class FactureAvoirController extends Controller
             smilify('success', 'Facture d\'avoir supprimée.');
         }
 
-        return redirect()->route('module_facture_avoir.index');
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -476,12 +471,18 @@ class FactureAvoirController extends Controller
                 'facture_avoir_id' => $facture_avoir->id,
                 'message' => $e->getMessage(),
             ]);
+            $notesArr = !empty($facture_avoir->notes) ? (json_decode($facture_avoir->notes, true) ?: []) : [];
+            $notesArr['sfe_error'] = $e->getMessage();
+            $facture_avoir->update([
+                'statut' => 'Erreur SFE',
+                'notes' => json_encode($notesArr, JSON_UNESCAPED_UNICODE)
+            ]);
             if (function_exists('smilify')) {
                 smilify('error', 'Fiscalisation refusée : ' . $e->getMessage());
             }
         }
 
-        return redirect()->route('module_facture_avoir.show', $facture_avoir->id);
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -644,9 +645,12 @@ class FactureAvoirController extends Controller
             ?? ($facture_avoir->nature_avoir ?: null);
         $isExportAvoir = $certif && $certif->type_facture === 'EA';
 
+        $notesDecoded = !empty($facture_avoir->notes) ? (json_decode($facture_avoir->notes, true) ?: []) : [];
+        $rrrSousType = $notesDecoded['rrr_sous_type'] ?? ($facture_avoir->nature_avoir === 'RRR' ? ($facture_avoir->motif ?: 'Remise') : null);
+
         return view('pages.facture_avoir.print', compact(
             'facture_avoir', 'elements', 'entete', 'certif', 'certifOriginal',
-            'natureLabel', 'isExportAvoir',
+            'natureLabel', 'isExportAvoir', 'rrrSousType',
             'total_ht', 'remise_1', 'remise_2', 'net_commercial',
             'tva_groups', 'total_taxe',
             'bic_groups', 'total_bic',

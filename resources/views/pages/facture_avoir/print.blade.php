@@ -585,7 +585,7 @@
     <!-- Barre d'outils écran -->
     <div class="toolbar">
         <div>
-            <a href="{{ route('module_facture_avoir.show', $facture_avoir->id) }}" class="btn btn-back">← Retour Avoir</a>
+            <a href="{{ route('module_ordre_facture.index') }}" class="btn btn-back">← Retour Factures & Avoirs</a>
         </div>
         <div>
             <button onclick="window.print()" class="btn btn-primary">🖨 Imprimer Facture d'Avoir</button>
@@ -637,12 +637,22 @@
 
             <!-- Colonne 3 : Identification Document (30%) -->
             <div class="header-col-doc">
-                <div class="doc-title">FACTURE D'AVOIR</div>
+                <div class="doc-title">
+                    @if($facture_avoir->nature_avoir === 'RRR')
+                        AVOIR FINANCIER — {{ strtoupper($rrrSousType ?: 'REMISE') }}
+                    @else
+                        FACTURE D'AVOIR
+                    @endif
+                </div>
                 <div class="doc-number-badge">N° {{ $facture_avoir->code }}</div>
                 <div class="doc-meta-date">Date : <strong>{{ \Carbon\Carbon::parse($facture_avoir->date)->format('d/m/Y') }}</strong></div>
                 <div>
                     <span class="nature-badge">
-                        Nature DGI : <strong>{{ $facture_avoir->nature_avoir }}</strong> — {{ $natureLabel ?? 'Annulation/Retour' }}
+                        @if($facture_avoir->nature_avoir === 'RRR')
+                            Nature DGI : <strong>RRR</strong> — {{ strtoupper($rrrSousType ?: 'Remise') }} ACCORDÉ(E)
+                        @else
+                            Nature DGI : <strong>{{ $facture_avoir->nature_avoir }}</strong> — {{ $natureLabel ?? 'Annulation/Retour' }}
+                        @endif
                     </span>
                 </div>
             </div>
@@ -655,8 +665,8 @@
                 <div><strong>Facture d'origine :</strong> {{ $factureOrigine->code ?? '—' }}</div>
                 <div><strong>Date de la facture :</strong> {{ $factureOrigine && $factureOrigine->date ? \Carbon\Carbon::parse($factureOrigine->date)->format('d/m/Y') : '—' }}</div>
                 <div><strong>Réf. SECeF Origine :</strong> {{ optional($certifOriginal)->sig ?? $factureOrigine->dgi_signature ?? 'N/A' }}</div>
-                <div><strong>Nature de l'Avoir :</strong> {{ $facture_avoir->nature_avoir }} ({{ $natureLabel ?? 'Avoir' }})</div>
-                <div style="grid-column: span 2;"><strong>Motif / Précisions :</strong> {{ $facture_avoir->objet ?: ($facture_avoir->motif ? ucfirst($facture_avoir->motif) : 'Ajustement commercial') }}</div>
+                <div><strong>Nature de l'Avoir :</strong> {{ $facture_avoir->nature_avoir }} ({{ $facture_avoir->nature_avoir === 'RRR' ? ($rrrSousType ?: 'Remise') : ($natureLabel ?? 'Avoir') }})</div>
+                <div style="grid-column: span 2;"><strong>Motif / Précisions :</strong> {{ $facture_avoir->objet ?: ($rrrSousType ? ($rrrSousType . ' accordé(e) après facturation') : ($facture_avoir->motif ? ucfirst($facture_avoir->motif) : 'Ajustement commercial')) }}</div>
             </div>
         </div>
 
@@ -720,7 +730,7 @@
                                 <small class="text-muted font-mono" style="font-size: 8px;">Code : {{ $codeProd }}</small>
                             @endif
                         </td>
-                        <td class="text-center fw-bold">{{ number_format($qte, 0, ',', ' ') }}</td>
+                        <td class="text-center fw-bold">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
                         <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
                         <td class="text-center font-mono">{{ $tauxTva > 0 ? $tauxTva.'%' : '0%' }}</td>
                         <td class="text-end font-mono fw-bold">{{ number_format($ligneBrut, 0, ',', ' ') }}</td>

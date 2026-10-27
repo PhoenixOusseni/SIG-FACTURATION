@@ -237,41 +237,95 @@ class Facture extends Model
     }
 
     /**
-     * Montant total TTC + BIC de la facture (somme des éléments).
+     * Montant total TTC + BIC de la facture (Net à Payer officiel SECeF).
+     * Intègre les remises commerciales proratisées sur la base HT et le calcul exact de la TVA et du PSVB.
      */
     public function getMontantTotalAttribute(): float
     {
-        $total = 0.0;
         $elements = $this->relationLoaded('ElementFactures')
             ? $this->getRelation('ElementFactures')
             : $this->ElementFactures()->with('Produit.tva')->get();
 
+        if ($elements->isEmpty()) {
+            return 0.0;
+        }
+
+        $totalHtBrut = 0.0;
+        $totalTs = 0.0;
+        $lignesParGroupe = [];
+
         foreach ($elements as $el) {
-            $quantite  = (float) $el->quantite;
-            $montantHt = $quantite * (float) $el->prix_unitaire;
-            $prod      = $el->Produit;
-            $tsUnit    = 0.0;
+            $quantite = (float) $el->quantite;
+            $pu = (float) $el->prix_unitaire;
+            $montantHt = $quantite * $pu;
+            $totalHtBrut += $montantHt;
+
+            $prod = $el->Produit;
+            $tsUnit = 0.0;
             if ($prod) {
                 if ($prod->type_ts === 'POURCENTAGE' && (float) ($prod->pourcentage_ts ?? 0) > 0) {
-                    $tsUnit = round(((float) $el->prix_unitaire) * ((float) $prod->pourcentage_ts / 100.0), 2);
+                    $tsUnit = round($pu * ((float) $prod->pourcentage_ts / 100.0), 2);
                 } else {
                     $tsUnit = (float) ($prod->montant_ts ?? 0);
                 }
             }
-            $tsTotal   = $tsUnit * $quantite;
+            $tsLigne = $tsUnit * $quantite;
+            $totalTs += $tsLigne;
 
-            $tauxTva   = (float) optional(optional($el->Produit)->tva)->taux;
-            $baseTva   = $montantHt + $tsTotal;
-            $tva       = $baseTva * $tauxTva / 100;
-            $ttc       = $baseTva + $tva;
+            $groupe = strtoupper((string) optional(optional($prod)->tva)->code ?: 'A');
+            $tauxTva = ($groupe === 'A') ? 0.0 : (float) optional(optional($prod)->tva)->taux;
 
-            $tauxBic   = (float) optional($this->Bic)->taux;
-            // PSVB applicable exclusivement aux biens matériels (LOCBIE, IMPBIE)
-            $bic       = ($prod && $prod->isBien()) ? ($ttc * $tauxBic / 100) : 0.0;
-
-            $total    += $ttc + $bic;
+            if (!isset($lignesParGroupe[$groupe])) {
+                $lignesParGroupe[$groupe] = ['taux' => $tauxTva, 'ht_brut' => 0.0, 'ts' => 0.0];
+            }
+            $lignesParGroupe[$groupe]['ht_brut'] += $montantHt;
+            $lignesParGroupe[$groupe]['ts'] += $tsLigne;
         }
-        return round($total, 2);
+
+        $remise1 = (float) ($this->remise_1 ?? 0);
+        $remise2 = (float) ($this->remise_2 ?? 0);
+        $remiseTotale = $remise1 + $remise2;
+        $netCommercial = max(0.0, $totalHtBrut - $remiseTotale);
+        $prorata = $totalHtBrut > 0 ? ($netCommercial / $totalHtBrut) : 1.0;
+
+        $totalTva = 0.0;
+        foreach ($lignesParGroupe as $grp => $info) {
+            $baseHt = round($info['ht_brut'] * $prorata, 2);
+            $baseTva = round($baseHt + $info['ts'], 2);
+            $totalTva += round($baseTva * ($info['taux'] / 100.0), 2);
+        }
+
+        $totalTtcBrut = $netCommercial + $totalTs + $totalTva;
+
+        $tauxBic = (float) optional($this->Bic)->taux;
+        $totalBic = 0.0;
+        if ($tauxBic > 0) {
+            $basePsvbBiens = 0.0;
+            foreach ($elements as $el) {
+                $prod = $el->Produit;
+                if ($prod && $prod->isBien()) {
+                    $qte = (float) $el->quantite;
+                    $pu = (float) $el->prix_unitaire;
+                    $ligneHt = $qte * $pu * $prorata;
+                    $tsUnit = 0.0;
+                    if ($prod->type_ts === 'POURCENTAGE' && (float) ($prod->pourcentage_ts ?? 0) > 0) {
+                        $tsUnit = round($pu * ((float) $prod->pourcentage_ts / 100.0), 2);
+                    } else {
+                        $tsUnit = (float) ($prod->montant_ts ?? 0);
+                    }
+                    $tsLigne = $tsUnit * $qte;
+                    $tauxTvaLigne = (float) optional(optional($prod)->tva)->taux;
+                    $baseTvaLigne = $ligneHt + $tsLigne;
+                    $tvaLigne = $baseTvaLigne * ($tauxTvaLigne / 100.0);
+                    $basePsvbBiens += ($baseTvaLigne + $tvaLigne);
+                }
+            }
+            if ($basePsvbBiens > 0) {
+                $totalBic = round($basePsvbBiens * ($tauxBic / 100.0), 2);
+            }
+        }
+
+        return round($totalTtcBrut + $totalBic, 2);
     }
 
     /**
@@ -287,17 +341,13 @@ class Facture extends Model
     }
 
     /**
-     * Solde restant dû par le client (Total TTC + BIC − Remises − Avoirs Fiscaux − Règlements).
+     * Solde restant dû par le client (Net à Payer − Avoirs Fiscaux − Règlements).
      */
     public function getResteAPayerAttribute(): float
     {
         if ($this->aAvoirTotal()) {
             return 0.0;
         }
-
-        $remise_1 = (float) ($this->remise_1 ?? 0);
-        $remise_2 = (float) ($this->remise_2 ?? 0);
-        $ristourne = (float) ($this->ristourne ?? 0);
 
         $totalAvoir = 0.0;
         $avoirs = $this->relationLoaded('FactureAvoirs')
@@ -308,7 +358,8 @@ class Facture extends Model
             $totalAvoir += (float) $av->montant_total;
         }
 
-        $netApresAvoir = max(0.0, round($this->montant_total - $remise_1 - $remise_2 - $ristourne - $totalAvoir, 2));
+        $ristourne = (float) ($this->ristourne ?? 0);
+        $netApresAvoir = max(0.0, round($this->montant_total - $ristourne - $totalAvoir, 2));
         return max(0.0, round($netApresAvoir - $this->montant_paye, 2));
     }
 

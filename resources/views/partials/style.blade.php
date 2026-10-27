@@ -421,4 +421,121 @@
         align-items: center;
         gap: 6px;
     }
+
+    /* ============================================================
+       DESIGN EXÉCUTIF HARMONISÉ : PAGINATION (DataTables & Laravel)
+       ============================================================ */
+    .dataTables_wrapper .dataTables_paginate,
+    .pagination {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        margin-top: 1rem !important;
+        margin-bottom: 0.5rem !important;
+        padding: 4px !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* Boutons de pagination généraux */
+    .dataTables_wrapper .dataTables_paginate .paginate_button,
+    .pagination .page-item .page-link {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-width: 38px !important;
+        height: 38px !important;
+        padding: 0 12px !important;
+        border-radius: 10px !important;
+        border: 1px solid #e2e8f0 !important;
+        background: #ffffff !important;
+        color: #475569 !important;
+        text-decoration: none !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        cursor: pointer !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    }
+
+    /* Hover standard */
+    .dataTables_wrapper .dataTables_paginate .paginate_button:not(.disabled):not(.current):hover,
+    .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
+        background: #f1f5f9 !important;
+        color: #1d3f7f !important;
+        border-color: #cbd5e1 !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 10px rgba(29, 63, 127, 0.1) !important;
+    }
+
+    /* Bouton Actif / Page courante */
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(135deg, #1d3f7f 0%, #152d5c 100%) !important;
+        color: #ffffff !important;
+        border-color: #1d3f7f !important;
+        box-shadow: 0 4px 12px rgba(29, 63, 127, 0.28) !important;
+        font-weight: 700 !important;
+    }
+
+    /* Boutons distinctifs PRÉCÉDENT et SUIVANT */
+    .dataTables_wrapper .dataTables_paginate .paginate_button.previous,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.next,
+    .pagination .page-item:first-child .page-link,
+    .pagination .page-item:last-child .page-link {
+        padding: 0 16px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.2px !important;
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #1e293b !important;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.previous:hover,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.next:hover,
+    .pagination .page-item:first-child:not(.disabled) .page-link:hover,
+    .pagination .page-item:last-child:not(.disabled) .page-link:hover {
+        background: #ffffff !important;
+        color: #1d3f7f !important;
+        border-color: #1d3f7f !important;
+        box-shadow: 0 4px 12px rgba(29, 63, 127, 0.15) !important;
+    }
+
+    /* État désactivé (disabled) */
+    .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover,
+    .pagination .page-item.disabled .page-link {
+        background: #f8fafc !important;
+        color: #94a3b8 !important;
+        border-color: #e2e8f0 !important;
+        cursor: not-allowed !important;
+        opacity: 0.65 !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Info de pagination */
+    .dataTables_wrapper .dataTables_info {
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        padding-top: 1rem !important;
+    }
+
+    /* Sélecteur de longueur de page */
+    .dataTables_wrapper .dataTables_length {
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        color: #475569 !important;
+        margin-bottom: 0.75rem !important;
+    }
+
+    .dataTables_wrapper .dataTables_length select {
+        border-radius: 8px !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 4px 10px !important;
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        background-color: #ffffff !important;
+        margin: 0 6px !important;
+        outline: none !important;
+    }
 </style>

@@ -47,8 +47,11 @@ class McfController extends Controller
             'message' => $pret
                 ? ($snapshot['message'] ?? 'Facturation fiscale opérationnelle.')
                 : 'Configuration incomplète ou boîtier non prêt.',
+            'dgi_days_since' => $snapshot['dgi_days_since'] ?? 0,
+            'dgi_last_sync' => $snapshot['dgi_last_sync'] ?? now()->format('d/m/Y à H:i:s'),
+            'warn_7_days' => $snapshot['warn_7_days'] ?? false,
         ];
-        $certifications = McfCertification::with(['facture.Contribuable'])->orderByDesc('id')->paginate(20);
+        $certifications = McfCertification::with(['facture.Contribuable'])->orderByDesc('id')->take(500)->get();
 
         return view('pages.mcf.index', compact('status', 'config', 'ports', 'connexion', 'settings', 'certifications'));
     }

@@ -203,6 +203,11 @@
                                 <i class="fas fa-file-invoice me-1"></i> Nouveau Devis
                             </button>
 
+                            {{-- Bouton 2 BIS : Nouveau Bordereau de Livraison --}}
+                            <button type="button" class="btn fw-semibold shadow-sm text-dark bg-white border" data-bs-toggle="modal" data-bs-target="#createBordereauModal">
+                                <i class="fas fa-truck me-1 text-primary"></i> Nouveau Bordereau
+                            </button>
+
                             {{-- Bouton 3 : Recertification Globale Erreurs --}}
                             @if ($nbErreursMcf > 0)
                                 <form action="{{ route('module_ordre_facture.recertifier_tout') }}" method="POST" class="d-inline"
@@ -271,7 +276,7 @@
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                         <div class="d-flex flex-wrap gap-2" id="hubFilterTabs">
                             <button type="button" class="hub-tab-btn active" onclick="filtrerTableau('tous')">
-                                <i class="fas fa-th-list me-1"></i> Toutes les pièces ({{ $collection->count() + $avoirs->count() + $proformas->count() }})
+                                <i class="fas fa-th-list me-1"></i> Toutes les pièces ({{ $collection->count() + $avoirs->count() + $proformas->count() + $bordereaux->count() }})
                             </button>
                             <button type="button" class="hub-tab-btn" onclick="filtrerTableau('FV')">
                                 <i class="fas fa-file-invoice me-1"></i> Ventes ({{ $collection->count() }})
@@ -281,6 +286,9 @@
                             </button>
                             <button type="button" class="hub-tab-btn" onclick="filtrerTableau('PRO')">
                                 <i class="fas fa-file-alt me-1"></i> Devis Proforma ({{ $proformas->count() }})
+                            </button>
+                            <button type="button" class="hub-tab-btn" onclick="filtrerTableau('BL')">
+                                <i class="fas fa-truck me-1"></i> Bordereaux ({{ $bordereaux->count() }})
                             </button>
                             <button type="button" class="hub-tab-btn text-warning-emphasis" onclick="filtrerTableau('IMPAYE')">
                                 <i class="fas fa-clock me-1"></i> Impayées ({{ $facturesImpayees->count() }})
@@ -462,7 +470,7 @@
                                                     @if ($sfeConnected)
                                                         <form action="{{ route('module_ordre_facture.recertifier', $facture->id) }}" method="POST" class="d-inline">
                                                             @csrf
-                                                            <button type="submit" class="btn btn-outline-danger" title="{{ $isErreur ? 'Retenter la certification MCF' : 'Fiscaliser / Certifier par le boîtier MCF' }}">
+                                                            <button type="submit" class="btn btn-outline-primary" title="{{ $isErreur ? 'Retenter la certification MCF' : 'Fiscaliser / Certifier par le boîtier MCF' }}">
                                                                 <i class="fas {{ $isErreur ? 'fa-sync' : 'fa-bolt' }}"></i>
                                                             </button>
                                                         </form>
@@ -470,6 +478,16 @@
                                                         <button type="button" class="btn btn-outline-secondary opacity-50" title="Boîtier MCF déconnecté (Branchez le boîtier pour fiscaliser)" disabled>
                                                             <i class="fas fa-bolt"></i>
                                                         </button>
+                                                    @endif
+
+                                                    {{-- Si en erreur MCF : Possibilité de réinitialiser en Brouillon avec restitution de stock et règlements --}}
+                                                    @if ($isErreur || str_contains(strtolower($facture->statut ?? ''), 'erreur') || !empty($facture->sfe_error))
+                                                        <form action="{{ route('module_ordre_facture.annuler_erreur', $facture->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Confirmez-vous la remise en Brouillon de la facture {{ $facture->code }} ? Les stocks décrémentés seront réintégrés et les règlements en attente seront annulés.')">
+                                                            @csrf
+                                                            <button type="submit" class="btn btn-outline-warning text-dark" title="Restituer les stocks, annuler les règlements en attente et remettre en Brouillon">
+                                                                <i class="fas fa-undo-alt"></i>
+                                                            </button>
+                                                        </form>
                                                     @endif
                                                 @endif
                                             </div>
@@ -481,6 +499,7 @@
                                 @foreach ($avoirs as $avoir)
                                     @php
                                         $isCertifieeAvoir = (bool) ($avoir->statut === 'Fiscalisée' || $avoir->dgi_signature);
+                                        $isErreurAvoir = (bool) (str_contains(strtolower($avoir->statut ?? ''), 'erreur') || !empty($avoir->sfe_error));
                                         $totAvoir = (float) ($avoir->montant_total ?? 0);
                                         $natureMap = [
                                             'RRR' => 'Remise commerciale',
@@ -590,10 +609,13 @@
                                             <span class="badge bg-light text-muted border">Devis / Proforma</span>
                                         </td>
                                         <td class="text-center">
-                                            @if ($proforma->estConvertie())
-                                                {{-- Règle 1 : Quand une facture proforma ou devis est convertie en facture, seul le bouton de détail s'affiche pour prévisualiser --}}
+                                            @php
+                                                $isProformaLocked = $proforma->estConvertie() || $proforma->bordereau_livraison_id || $proforma->statut === 'transformée';
+                                            @endphp
+                                            @if ($isProformaLocked)
+                                                {{-- Règle : Quand un devis est converti en facture ou transformé en BL, seul le bouton de détail s'affiche pour prévisualiser --}}
                                                 <button type="button" class="btn btn-outline-primary btn-sm px-2.5"
-                                                    title="Prévisualiser la proforma convertie"
+                                                    title="Prévisualiser la proforma"
                                                     onclick="openPreview({{ $proforma->id }}, '{{ $proforma->code }}', false, 'proforma')">
                                                     <i class="fas fa-eye me-1"></i> Détails
                                                 </button>
@@ -605,6 +627,13 @@
                                                         onclick="openPreview({{ $proforma->id }}, '{{ $proforma->code }}', false, 'proforma')">
                                                         <i class="fas fa-eye text-primary"></i>
                                                     </button>
+
+                                                    {{-- Générer le bordereau de livraison (BL) --}}
+                                                    <a href="{{ route('bordereau_from_proforma', $proforma->id) }}" class="btn btn-outline-warning text-dark"
+                                                        title="Générer le bordereau de livraison"
+                                                        onclick="return confirm('Générer le bordereau de livraison à partir du devis {{ $proforma->code }} ?')">
+                                                        <i class="fas fa-truck me-1"></i> BL
+                                                    </a>
 
                                                     {{-- Conversion Fluide dans le Formulaire Pré-rempli --}}
                                                     <button type="button" class="btn btn-outline-success"
@@ -624,6 +653,108 @@
                                                     </form>
                                                 </div>
                                             @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+
+                                {{-- 4. Bordereaux de Livraison (BL) --}}
+                                @foreach ($bordereaux as $bl)
+                                    @php
+                                        $totBl = $bl->ElementBordereauLivraisons->sum(function($el) {
+                                            return $el->montant_total ?? ($el->quantite * $el->prix_unitaire);
+                                        });
+                                        $isFacture = ($bl->statut === 'facturé' || $bl->facture_id);
+                                        $isLivre = ($bl->statut === 'livré');
+                                        $statusClass = $isFacture ? 'FACTURE' : ($isLivre ? 'LIVRE' : 'EN_ATTENTE');
+                                    @endphp
+                                    <tr class="hub-row" data-type="BL" data-status="{{ $statusClass }}">
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge bg-secondary text-white font-monospace">BL</span>
+                                                <a href="javascript:void(0)" onclick="openPreview({{ $bl->id }}, '{{ $bl->code }}', false, 'bl')" class="fw-bold font-monospace text-dark fs-6 text-decoration-none" title="Prévisualiser le bordereau">
+                                                    {{ $bl->code }}
+                                                </a>
+                                            </div>
+                                        </td>
+                                        <td data-order="{{ $bl->date ? \Carbon\Carbon::parse($bl->date)->format('Y-m-d') : '1970-01-01' }}">
+                                            <div>{{ $bl->date ? \Carbon\Carbon::parse($bl->date)->format('d/m/Y') : 'N/A' }}</div>
+                                            @if ($bl->reference)
+                                                <small class="text-muted font-monospace">{{ $bl->reference }}</small>
+                                            @endif
+                                            @if ($bl->FactureProforma)
+                                                <small class="text-primary d-block font-monospace" style="font-size: 11px;">Devis : {{ $bl->FactureProforma->code }}</small>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold text-dark">{{ optional($bl->Contribuable)->assujeti ?? 'Client' }}</div>
+                                            @if ($bl->transporteur || $bl->livreur)
+                                                <small class="text-muted" style="font-size: 11px;"><i class="fas fa-truck me-1"></i>{{ $bl->transporteur ?: $bl->livreur }}</small>
+                                            @endif
+                                        </td>
+                                        <td class="text-end font-monospace fw-bold fs-6" data-order="{{ $totBl }}">
+                                            {{ number_format($totBl, 0, ',', ' ') }} F
+                                        </td>
+                                        <td class="text-center">
+                                            @if ($isFacture)
+                                                <span class="badge bg-success-subtle text-success border border-success px-2 py-1">
+                                                    <i class="fas fa-file-invoice-dollar me-1"></i> Facturé
+                                                </span>
+                                            @elseif ($isLivre)
+                                                <span class="badge bg-primary-subtle text-primary border border-primary px-2 py-1">
+                                                    <i class="fas fa-check-double me-1"></i> Livré
+                                                </span>
+                                            @else
+                                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1">
+                                                    <i class="fas fa-clock me-1"></i> En attente
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td class="text-center">
+                                            @if ($bl->Facture)
+                                                <span class="badge bg-light text-success border font-monospace">{{ $bl->Facture->code }}</span>
+                                            @else
+                                                <span class="badge bg-light text-muted border">Bordereau</span>
+                                            @endif
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group btn-group-sm shadow-sm" role="group">
+                                                {{-- Aperçu BL --}}
+                                                <button type="button" class="btn btn-outline-primary"
+                                                    title="Prévisualiser et Imprimer le BL"
+                                                    onclick="openPreview({{ $bl->id }}, '{{ $bl->code }}', false, 'bl')">
+                                                    <i class="fas fa-eye text-primary"></i>
+                                                </button>
+
+                                                {{-- Marquer comme livré si non livré et non facturé --}}
+                                                @if (!$isLivre && !$isFacture)
+                                                    <a href="{{ route('bordereau_livre', $bl->id) }}" class="btn btn-outline-info"
+                                                        title="Marquer comme livré"
+                                                        onclick="return confirm('Confirmez-vous que les marchandises ont été livrées au client ?')">
+                                                        <i class="fas fa-check"></i>
+                                                    </a>
+                                                @endif
+
+                                                {{-- Transformer en Facture si non facturé --}}
+                                                @if (!$isFacture)
+                                                    <a href="{{ route('facture_from_bordereau', $bl->id) }}" class="btn btn-outline-success"
+                                                        title="Transformer en Facture Définitive"
+                                                        onclick="return confirm('Transformer ce bordereau de livraison en facture de vente définitive ?')">
+                                                        <i class="fas fa-file-invoice-dollar me-1"></i> Facturer
+                                                    </a>
+                                                @endif
+
+                                                {{-- Supprimer le BL si non facturé --}}
+                                                @if (!$isFacture)
+                                                    <form action="{{ route('module_bordereau_livraison.destroy', $bl->id) }}" method="POST" class="d-inline"
+                                                        onsubmit="return confirm('Supprimer ce bordereau de livraison {{ $bl->code }} ?')">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn btn-outline-danger" title="Supprimer ce bordereau">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -1222,6 +1353,122 @@
         </div>
 
         {{-- ====================================================================
+             MODALE 2 BIS : NOUVEAU BORDEREAU DE LIVRAISON DIRECT
+             ==================================================================== --}}
+        <div class="modal fade" id="createBordereauModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+            <div class="modal-dialog modal-xl">
+                <form action="{{ route('module_bordereau_livraison.store') }}" method="POST" class="modal-content border-0 shadow-lg">
+                    @csrf
+                    <input type="hidden" name="from_hub" value="1">
+                    <div class="modal-header text-white" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-truck text-warning fs-5"></i>
+                            <h5 class="modal-title fw-bold text-white mb-0">Nouveau Bordereau de Livraison (BL)</h5>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <div class="modal-body p-4 bg-light">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-5">
+                                <label class="form-label fw-semibold">Client Destinataire <span class="text-danger">*</span></label>
+                                <select name="contribuables_id" class="form-select select2-input" required style="width:100%">
+                                    <option value="">-- Sélectionner le client --</option>
+                                    @foreach ($contribuables as $contribuable)
+                                        <option value="{{ $contribuable->id }}">{{ $contribuable->assujeti }} {{ $contribuable->ifu ? '(IFU: ' . $contribuable->ifu . ')' : '' }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Dépôt / Service d'Expédition <span class="text-danger">*</span></label>
+                                <select name="service_id" class="form-select" required>
+                                    @foreach ($services as $serv)
+                                        <option value="{{ $serv->id }}">{{ $serv->nom }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">Date de Livraison</label>
+                                <input type="date" name="date" class="form-control" value="{{ date('Y-m-d') }}" required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Référence / N° Commande</label>
+                                <input type="text" name="reference" class="form-control" placeholder="Ex: BL-CLIENT-001 ou N° BC">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Société de Transport</label>
+                                <input type="text" name="transporteur" class="form-control" placeholder="Ex: Transport Express ou Véhicule société">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Nom du Chauffeur / Livreur</label>
+                                <input type="text" name="livreur" class="form-control" placeholder="Ex: Jean Dupont (Tel: ...)">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Instructions &amp; Observations de Livraison</label>
+                                <input type="text" name="observation" class="form-control" placeholder="Ex: Livrer à l'entrepôt B, déchargement par le client">
+                            </div>
+                        </div>
+
+                        {{-- Lignes d'Articles du Bordereau --}}
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-header bg-white py-2 fw-bold text-dark d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-boxes me-2 text-primary"></i> Marchandises &amp; Colis à Livrer</span>
+                                <button type="button" class="btn btn-sm btn-primary fw-semibold" id="addBordereauRowBtn">
+                                    <i class="fas fa-plus me-1"></i> Ajouter article
+                                </button>
+                            </div>
+                            <div class="card-body p-0">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Article &bull; Référence &amp; Désignation</th>
+                                            <th style="width: 140px;" class="text-end">P.U. HT (FCFA)</th>
+                                            <th style="width: 120px;" class="text-center">Quantité</th>
+                                            <th style="width: 170px;" class="text-end">Total Ligne HT</th>
+                                            <th style="width: 50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="bordereauElementsContainer">
+                                        <tr class="bordereau-row">
+                                            <td>
+                                                <select name="produits_id[]" class="form-select form-select-sm bordereau-product-select" onchange="onBordereauProductChange(this)" required>
+                                                    <option value="">-- Sélectionner un article physique --</option>
+                                                    @foreach ($produits as $prod)
+                                                        @if ($prod->isBien())
+                                                            <option value="{{ $prod->id }}" data-price="{{ $prod->prix_unitaire }}" data-designation="{{ $prod->designation }}">{{ $prod->code }} - {{ $prod->designation }} (Stock: {{ number_format($prod->qte ?? 0, 2, ',', ' ') }})</option>
+                                                        @endif
+                                                    @endforeach
+                                                </select>
+                                                <input type="hidden" name="designation[]" class="bordereau-designation-input">
+                                            </td>
+                                            <td><input type="number" step="0.01" min="0" name="prix_unitaire[]" class="form-control form-control-sm text-end font-monospace bordereau-price-input" placeholder="0" oninput="recalcBordereauRow(this)" required></td>
+                                            <td><input type="number" step="0.01" min="0.01" name="quantite[]" class="form-control form-control-sm text-center font-monospace bordereau-qty-input" value="1" oninput="recalcBordereauRow(this)" required></td>
+                                            <td class="text-end font-monospace fw-bold text-primary bordereau-line-total">0 FCFA</td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-outline-danger btn-sm p-1" onclick="$(this).closest('tr').remove(); recalcBordereauTotal();"><i class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end align-items-center bg-white p-3 rounded border">
+                            <span class="text-muted me-3">Valeur Totale Marchandises :</span>
+                            <span class="fs-5 fw-bold font-monospace text-primary" id="bordereauTotalDisplay">0 FCFA</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-white border-top">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn fw-bold px-4 text-white" style="background: #1e293b;">
+                            <i class="fas fa-save me-1"></i> Enregistrer le Bordereau
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {{-- ====================================================================
              MODALE 3 : ÉMISSION D'UN AVOIR FISCAL DIRECT (AVEC SÉLECTION DES LIGNES)
              ==================================================================== --}}
         <div class="modal fade" id="quickAvoirModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -1312,7 +1559,7 @@
                                 <div class="row g-2 align-items-end">
                                     <div class="col-md-3">
                                         <label class="form-label small fw-semibold">Nature de la réduction</label>
-                                        <select id="quick_rrr_type" class="form-select form-select-sm">
+                                        <select name="rrr_sous_type" id="quick_rrr_type" class="form-select form-select-sm fw-bold">
                                             <option value="Remise commerciale">Remise commerciale</option>
                                             <option value="Rabais">Rabais (défaut de conformité)</option>
                                             <option value="Ristourne">Ristourne (volume périodique)</option>
@@ -1753,10 +2000,15 @@
             let titlePrefix = 'Facture de Vente';
             if (currentPreviewType === 'avoir') titlePrefix = 'Facture d\'Avoir';
             if (currentPreviewType === 'proforma') titlePrefix = 'Facture Proforma';
+            if (currentPreviewType === 'bl') titlePrefix = 'Bordereau de Livraison';
 
             $('#previewModalTitle').text(titlePrefix + ' ' + code);
 
-            if (isCertifiee) {
+            if (currentPreviewType === 'bl') {
+                $('#previewModalBadge')
+                    .html('<i class="fas fa-truck me-1"></i> Document Logistique')
+                    .attr('style', 'font-size: 11px; padding: 4px 10px; background: rgba(59, 130, 246, 0.15) !important; color: #60a5fa !important; border: 1px solid rgba(59, 130, 246, 0.3) !important;');
+            } else if (isCertifiee) {
                 $('#previewModalBadge')
                     .html('<i class="fas fa-circle me-1" style="font-size: 6px; vertical-align: middle;"></i> Certifiée SFE / DGI')
                     .attr('style', 'font-size: 11px; padding: 4px 10px; background: rgba(16, 185, 129, 0.15) !important; color: #34d399 !important; border: 1px solid rgba(16, 185, 129, 0.3) !important;');
@@ -1766,7 +2018,7 @@
                     .attr('style', 'font-size: 11px; padding: 4px 10px; background: rgba(245, 158, 11, 0.15) !important; color: #fbbf24 !important; border: 1px solid rgba(245, 158, 11, 0.3) !important;');
             }
 
-            if (currentPreviewType === 'proforma') {
+            if (currentPreviewType === 'proforma' || currentPreviewType === 'bl') {
                 $('#btnPreviewTicket').hide();
             } else {
                 $('#btnPreviewTicket').show();
@@ -1786,6 +2038,7 @@
                 let url = '/print_ordre_facture/' + currentPreviewId + '?iframe=1';
                 if (currentPreviewType === 'avoir') url = '/print_facture_avoir/' + currentPreviewId + '?iframe=1';
                 if (currentPreviewType === 'proforma') url = '/print_facture_proforma/' + currentPreviewId + '?iframe=1';
+                if (currentPreviewType === 'bl') url = '/print_bordereau_livraison/' + currentPreviewId + '?iframe=1';
                 document.getElementById('previewIframe').src = url;
             } else {
                 $('#btnPreviewTicket').addClass('active');
@@ -2779,6 +3032,35 @@
             $('#proformaTotalDisplay').text(netDevis.toLocaleString('fr-FR') + ' FCFA');
         }
 
+        // 13 BIS. Fonctions Bordereau de Livraison
+        function onBordereauProductChange(select) {
+            const price = parseFloat($(select).find('option:selected').data('price')) || 0;
+            const designation = $(select).find('option:selected').data('designation') || '';
+            const row = $(select).closest('tr');
+            row.find('.bordereau-price-input').val(price);
+            row.find('.bordereau-designation-input').val(designation);
+            recalcBordereauRow(row.find('.bordereau-qty-input')[0]);
+        }
+
+        function recalcBordereauRow(input) {
+            const row = $(input).closest('tr');
+            const qte = parseFloat(row.find('.bordereau-qty-input').val()) || 0;
+            const pu = parseFloat(row.find('.bordereau-price-input').val()) || 0;
+            const tot = Math.round(qte * pu);
+            row.find('.bordereau-line-total').text(tot.toLocaleString('fr-FR') + ' FCFA');
+            recalcBordereauTotal();
+        }
+
+        function recalcBordereauTotal() {
+            let totalBrut = 0;
+            $('.bordereau-row').each(function() {
+                const qte = parseFloat($(this).find('.bordereau-qty-input').val()) || 0;
+                const pu = parseFloat($(this).find('.bordereau-price-input').val()) || 0;
+                totalBrut += (qte * pu);
+            });
+            $('#bordereauTotalDisplay').text(Math.round(totalBrut).toLocaleString('fr-FR') + ' FCFA');
+        }
+
         // Initialisation globale
         $(document).ready(function() {
             if (typeof InvoiceLines !== 'undefined') {
@@ -2869,6 +3151,58 @@
                     </tr>
                 `;
                 $('#proformaElementsContainer').append(rowHtml);
+            });
+
+            // Gestion de l'ajout de ligne pour Bordereau de Livraison
+            $('#addBordereauRowBtn').on('click', function() {
+                const rowHtml = `
+                    <tr class="bordereau-row">
+                        <td>
+                            <select name="produits_id[]" class="form-select form-select-sm bordereau-product-select" onchange="onBordereauProductChange(this)" required>
+                                <option value="">-- Sélectionner un article physique --</option>
+                                @foreach ($produits as $prod)
+                                    @if ($prod->isBien())
+                                        <option value="{{ $prod->id }}" data-price="{{ $prod->prix_unitaire }}" data-designation="{{ $prod->designation }}">{{ $prod->code }} - {{ $prod->designation }} (Stock: {{ number_format($prod->qte ?? 0, 2, ',', ' ') }})</option>
+                                    @endif
+                                @endforeach
+                            </select>
+                            <input type="hidden" name="designation[]" class="bordereau-designation-input">
+                        </td>
+                        <td><input type="number" step="0.01" min="0" name="prix_unitaire[]" class="form-control form-control-sm text-end font-monospace bordereau-price-input" placeholder="0" oninput="recalcBordereauRow(this)" required></td>
+                        <td><input type="number" step="0.01" min="0.01" name="quantite[]" class="form-control form-control-sm text-center font-monospace bordereau-qty-input" value="1" oninput="recalcBordereauRow(this)" required></td>
+                        <td class="text-end font-monospace fw-bold text-primary bordereau-line-total">0 FCFA</td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-outline-danger btn-sm p-1" onclick="$(this).closest('tr').remove(); recalcBordereauTotal();"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+                $('#bordereauElementsContainer').append(rowHtml);
+            });
+
+            // Initialisation Select2 sur le champ Client Assujetti avec recherche dynamique
+            if ($.fn.select2 && $('#contribuable_id').length) {
+                $('#contribuable_id').select2({
+                    placeholder: '-- Rechercher un client assujetti (Nom, IFU, Téléphone) --',
+                    allowClear: true,
+                    width: '100%',
+                    dropdownParent: $('#createFactureModal')
+                }).on('select2:select select2:clear change', function() {
+                    validerChampsObligatoires();
+                    calculerSyntheseLive();
+                });
+            }
+
+            // Synchronisation bidirectionnelle : Mode convenu <-> Mode de règlement en vente au comptant
+            $(document).on('change', '#paiementsContainer tr.paiement-row:first .reglement-mode-select', function() {
+                if (currentConditionReglement === 'COMPTANT') {
+                    const val = $(this).val();
+                    const $matchingOpt = $('#modepaie_id option').filter(function() {
+                        return $(this).data('code') === val;
+                    });
+                    if ($matchingOpt.length) {
+                        $('#modepaie_id').val($matchingOpt.val());
+                    }
+                }
             });
 
             @if ((isset($errors) && $errors->any()) || session('form_error'))

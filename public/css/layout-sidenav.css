@@ -29,15 +29,19 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-/* Soften the overlapping card pull-up so titles stay readable */
-#layoutSidenav_content .mt-n10 {
-  margin-top: -3rem !important;
+/* Neutralise overlapping card pull-up globally to avoid clipping header actions */
+#layoutSidenav_content .mt-n10,
+.container-xl.mt-n10,
+.container-fluid.mt-n10,
+.mt-n10 {
+  margin-top: 0 !important;
   position: relative;
-  z-index: 2;
+  z-index: 1;
 }
 @media (max-width: 767.98px) {
-  #layoutSidenav_content .mt-n10 {
-    margin-top: -1.5rem !important;
+  #layoutSidenav_content .mt-n10,
+  .mt-n10 {
+    margin-top: 0 !important;
   }
 }
 

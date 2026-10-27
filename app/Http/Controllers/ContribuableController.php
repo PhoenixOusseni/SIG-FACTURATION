@@ -103,7 +103,9 @@ class ContribuableController extends Controller
                 'item' => [
                     'id' => $contribuable->id,
                     'assujeti' => $contribuable->assujeti,
-                    'text' => $contribuable->assujeti,
+                    'ifu' => $contribuable->ifu,
+                    'telephone' => $contribuable->telephone,
+                    'text' => $contribuable->assujeti . ($contribuable->ifu ? ' (IFU: ' . $contribuable->ifu . ')' : ''),
                 ],
             ], 201);
         }

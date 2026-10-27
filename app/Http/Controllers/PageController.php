@@ -94,6 +94,25 @@ class PageController extends Controller
             ? round(($totalEncaissements / $totalCaGlobal) * 100, 1)
             : 0;
 
+        // ── Créances clients restantes (Factures actives non soldées) ──
+        $totalCreancesGlobal = (float) $collection
+            ->filter(fn($f) => $f->statut !== 'brouillon' && !$f->aAvoirTotal())
+            ->sum(fn($f) => max(0.0, (float) $f->reste_a_payer));
+
+        // ── Trésorerie Caisse théorique (Dépôts + Règlements Espèces - Retraits) ──
+        $totalDepotsCaisse = (float) DB::table('mouvements_caisse')->where('type', 'DEPOT')->sum('montant');
+        $totalRetraitsCaisse = (float) DB::table('mouvements_caisse')->where('type', 'RETRAIT')->sum('montant');
+        $totalEspecesFactures = (float) DB::table('reglements')->where(function ($q) {
+            $q->where('mode', 'like', '%Espèce%')->orWhere('mode', 'ESP');
+        })->sum('montant');
+        $totalEspecesTickets = 0.0;
+        if (\Illuminate\Support\Facades\Schema::hasTable('reglement_tickets')) {
+            $totalEspecesTickets = (float) DB::table('reglement_tickets')->where(function ($q) {
+                $q->where('mode', 'like', '%Espèce%')->orWhere('mode', 'ESP');
+            })->sum('montant');
+        }
+        $soldeTheoriqueCaisse = max(0.0, round($totalDepotsCaisse + $totalEspecesFactures + $totalEspecesTickets - $totalRetraitsCaisse, 2));
+
         // ── KPI : comptages ──
         $nombreClientsActifs = DB::table('factures')->distinct('contribuable_id')->count('contribuable_id');
         $nombreProformas     = DB::table('facture_proformas')->count();
@@ -211,6 +230,7 @@ class PageController extends Controller
             'nombreFactures', 'nombreFacturesImpayees', 'nombreFacturesSoldees', 'nombreFacturesPartielles',
             'totalCaMois', 'totalEncaissementsMois', 'totalDepensesMois',
             'totalCaGlobal', 'totalEncaissements', 'tauxRecouvrement',
+            'totalCreancesGlobal', 'soldeTheoriqueCaisse',
             'nombreClientsActifs', 'nombreProformas', 'nombreBordereaux', 'nombreFournisseurs',
             'evolutionCa', 'evolutionEncaissements', 'labels',
             'derniersReglements'

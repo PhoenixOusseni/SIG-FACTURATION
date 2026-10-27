@@ -99,6 +99,10 @@
                             </thead>
                             <tbody>
                                 @forelse ($collection as $item)
+                                    @php
+                                        $isService = $item->isService();
+                                        $qte = (float)($item->qte ?? 0);
+                                    @endphp
                                     <tr>
                                         <td class="fw-bold font-monospace text-primary">{{ $item->code }}</td>
                                         <td class="fw-bold">{{ $item->designation }}</td>

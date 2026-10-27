@@ -37,8 +37,8 @@
                     </div>
                     @if ($collection->count() > 0)
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
+                            <table class="table table-hover align-middle mb-0" id="fournisseursTable" style="width: 100%;">
+                                <thead class="table-light">
                                     <tr>
                                         <th>Code</th>
                                         <th>Désignation</th>
@@ -52,28 +52,27 @@
                                     @foreach ($collection as $fournisseur)
                                         <tr>
                                             <td>
-                                                <span style="font-weight: 600; color: var(--primary-color);">
-                                                    {{ $fournisseur->id }}
+                                                <span class="fw-bold font-monospace text-primary">
+                                                    FOUR-{{ str_pad($fournisseur->id, 4, '0', STR_PAD_LEFT) }}
                                                 </span>
                                             </td>
-                                            <td>{{ $fournisseur->assujeti }}</td>
+                                            <td class="fw-semibold">{{ $fournisseur->assujeti }}</td>
                                             <td>{{ $fournisseur->telephone ?? 'N/A' }}</td>
-                                            <td>{{ $fournisseur->ifu ?? '—' }}</td>
+                                            <td class="font-monospace small">{{ $fournisseur->ifu ?? '—' }}</td>
                                             <td>
                                                 @if ($fournisseur->Categorie)
-                                                    <span class="badge badge-primary text-dark">
+                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
                                                         {{ $fournisseur->Categorie->libelle }}
                                                     </span>
                                                 @else
-                                                    <span class="badge"
-                                                        style="background: var(--border-color); color: var(--text-dark);">
+                                                    <span class="badge bg-light text-muted border">
                                                         Non assignée
                                                     </span>
                                                 @endif
                                             </td>
                                             <td class="text-center">
                                                 <a href="{{ route('module_fournisseur.show', $fournisseur->id) }}"
-                                                    class="btn btn-sm btn-success">
+                                                    class="btn btn-sm btn-outline-primary" title="Consulter la fiche">
                                                     <i class="fa fa-eye"></i>
                                                 </a>
                                             </td>
@@ -81,7 +80,6 @@
                                     @endforeach
                                 </tbody>
                             </table>
-                            {{ $collection->links() }}
                         </div>
                     @else
                         <div style="text-align: center; padding: 3rem 1rem; color: var(--text-light);">
@@ -223,6 +221,48 @@
 
 @section('script')
     <script>
+        let fournisseursDataTable = null;
+        $(document).ready(function() {
+            if ($.fn.DataTable && $('#fournisseursTable').length && !$.fn.DataTable.isDataTable('#fournisseursTable')) {
+                fournisseursDataTable = $('#fournisseursTable').DataTable({
+                    order: [[1, 'asc']],
+                    pageLength: 10,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]],
+                    columnDefs: [
+                        { targets: [5], orderable: false, searchable: false }
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche rapide :",
+                        lengthMenu: "Afficher _MENU_ fournisseurs",
+                        info: "Affichage de _START_ à _END_ sur _TOTAL_ fournisseurs",
+                        infoEmpty: "Affichage de 0 à 0 sur 0 fournisseur",
+                        infoFiltered: "(filtré sur _MAX_ fournisseurs)",
+                        zeroRecords: "Aucun fournisseur trouvé",
+                        emptyTable: "Aucun fournisseur enregistré",
+                        paginate: {
+                            first: "Premier",
+                            previous: "<i class='fas fa-chevron-left me-1'></i> Précédent",
+                            next: "Suivant <i class='fas fa-chevron-right ms-1'></i>",
+                            last: "Dernier"
+                        }
+                    }
+                });
+            }
+
+            window.searchTable = function() {
+                const val = document.getElementById("searchInput").value;
+                if (fournisseursDataTable) {
+                    fournisseursDataTable.search(val).draw();
+                } else {
+                    const filter = val.toUpperCase();
+                    $('#fournisseursTable tbody tr').each(function() {
+                        $(this).toggle($(this).text().toUpperCase().indexOf(filter) > -1);
+                    });
+                }
+            };
+        });
+
         @if ($errors->any())
         document.addEventListener('DOMContentLoaded', function() {
             var el = document.getElementById('createFournisseurModal');

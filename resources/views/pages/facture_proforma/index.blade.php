@@ -63,8 +63,8 @@
                     </div>
                     @if ($collection->count() > 0)
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
+                            <table class="table table-hover align-middle mb-0" id="proformasTable" style="width: 100%;">
+                                <thead class="table-light">
                                     <tr>
                                         <th>Code</th>
                                         <th>Référence</th>
@@ -77,23 +77,22 @@
                                 <tbody>
                                     @foreach ($collection as $facture)
                                         <tr>
-                                            <td><span
-                                                    style="font-weight: 600; color: var(--primary-color);">{{ $facture->code }}</span>
+                                            <td>
+                                                <span class="fw-bold font-monospace text-primary">{{ $facture->code }}</span>
                                             </td>
                                             <td>{{ $facture->reference }}</td>
-                                            <td>{{ $facture->Contribuable->assujeti ?? 'N/A' }}</td>
+                                            <td class="fw-semibold">{{ $facture->Contribuable->assujeti ?? 'N/A' }}</td>
                                             <td class="text-center">
                                                 @if ($facture->estConvertie())
-                                                    <span class="badge bg-success-subtle text-success border border-success px-2 py-1">Facturée</span>
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Facturée</span>
                                                 @else
                                                     <span class="badge bg-secondary-subtle text-secondary px-2 py-1">{{ ucfirst($facture->statut ?? 'Devis') }}</span>
                                                 @endif
                                             </td>
-                                            <td>{{ $facture->date ?? 'N/A' }}</td>
+                                            <td data-order="{{ $facture->date ? \Carbon\Carbon::parse($facture->date)->format('Y-m-d') : '' }}">{{ $facture->date ?? 'N/A' }}</td>
                                             <td class="text-center">
                                                 <a href="{{ route('module_facture_proforma.show', [$facture->id]) }}"
-                                                    class="btn btn-sm btn-primary"
-                                                    style="border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;"
+                                                    class="btn btn-sm btn-outline-primary"
                                                     title="{{ $facture->estConvertie() ? 'Détails & Prévisualisation' : 'Consulter' }}">
                                                     <i class="fa fa-eye"></i>
                                                 </a>
@@ -411,6 +410,47 @@
                     $sel.val(String(item.id)).trigger('change');
                 }
             });
+
+            // Initialisation de DataTable sur la liste des factures proforma
+            let proformasDataTable = null;
+            if ($.fn.DataTable && $('#proformasTable').length && !$.fn.DataTable.isDataTable('#proformasTable')) {
+                proformasDataTable = $('#proformasTable').DataTable({
+                    order: [[4, 'desc']], // Tri par date décroissante
+                    pageLength: 10,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Toutes"]],
+                    columnDefs: [
+                        { targets: [5], orderable: false, searchable: false }
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche :",
+                        lengthMenu: "Afficher _MENU_ proformas",
+                        info: "Affichage de _START_ à _END_ sur _TOTAL_ proformas",
+                        infoEmpty: "Affichage de 0 à 0 sur 0 proforma",
+                        infoFiltered: "(filtré sur _MAX_ proformas)",
+                        zeroRecords: "Aucune proforma trouvée",
+                        emptyTable: "Aucune proforma enregistrée",
+                        paginate: {
+                            first: "Premier",
+                            previous: "<i class='fas fa-chevron-left me-1'></i> Précédent",
+                            next: "Suivant <i class='fas fa-chevron-right ms-1'></i>",
+                            last: "Dernier"
+                        }
+                    }
+                });
+            }
+
+            window.searchTable = function() {
+                const val = document.getElementById("searchInput").value;
+                if (proformasDataTable) {
+                    proformasDataTable.search(val).draw();
+                } else {
+                    const filter = val.toUpperCase();
+                    $('#proformasTable tbody tr').each(function() {
+                        $(this).toggle($(this).text().toUpperCase().indexOf(filter) > -1);
+                    });
+                }
+            };
 
             @if ($errors->any() || session('form_error'))
                 new bootstrap.Modal(document.getElementById('createProformaModal')).show();

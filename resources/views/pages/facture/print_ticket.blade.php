@@ -152,7 +152,7 @@
                             @if($tsUnit > 0) +TS {{ number_format($tsUnit * $qte, 0, ',', ' ') }}@endif
                         </div>
                     </td>
-                    <td class="text-center">{{ number_format($qte, 0, ',', ' ') }}</td>
+                    <td class="text-center">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
                     <td class="text-end">{{ number_format($pu, 0, ',', ' ') }}</td>
                     <td class="text-end fw-bold">{{ number_format($ligneTotal, 0, ',', ' ') }}</td>
                 </tr>

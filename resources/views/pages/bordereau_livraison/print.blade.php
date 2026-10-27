@@ -688,7 +688,7 @@
                         <td class="center">{{ $i + 1 }}</td>
                         <td class="ref-cell">{{ optional($element->Produit)->code }}</td>
                         <td>{{ $element->designation ?? optional($element->Produit)->designation }}</td>
-                        <td class="right qty-cell">{{ number_format($quantite, 2, ',', ' ') }}</td>
+                        <td class="right qty-cell">{{ (float)$quantite == (int)$quantite ? number_format($quantite, 0, ',', ' ') : rtrim(rtrim(number_format($quantite, 3, ',', ' '), '0'), ',') }}</td>
                         <td class="center"><span class="check-box"></span></td>
                     </tr>
                 @endforeach

@@ -16,7 +16,7 @@ class FournisseurController extends Controller
      */
     public function index()
     {
-        $collection = Fournisseur::with('Categorie')->paginate(10);
+        $collection = Fournisseur::with('Categorie')->orderBy('assujeti')->get();
         $categories = Categorie::all();
 
         return view('pages.fournisseur.index', compact('collection', 'categories'));

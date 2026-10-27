@@ -277,8 +277,8 @@
                             </div>
                         </div>
                         <div class="dash-kpi-footer">
-                            <span>Total cumulé :</span>
-                            <strong class="font-monospace text-dark">{{ number_format($totalEncaissements, 0, ',', ' ') }} F</strong>
+                            <span>Solde caisse théorique :</span>
+                            <strong class="font-monospace text-success" title="Total des numéraires réels en caisse">{{ number_format($soldeTheoriqueCaisse, 0, ',', ' ') }} F</strong>
                         </div>
                     </div>
                 </div>
@@ -363,11 +363,14 @@
                             <div class="dash-kpi-icon" style="background: #fef2f2; color: #dc2626; width: 40px; height: 40px;">
                                 <i data-feather="alert-circle" style="width: 18px; height: 18px;"></i>
                             </div>
-                            <span class="fs-4 fw-bold text-danger font-monospace">{{ $nombreFacturesImpayees }}</span>
+                            <div class="text-end">
+                                <span class="fs-5 fw-bold text-danger font-monospace d-block">{{ number_format($totalCreancesGlobal, 0, ',', ' ') }} F</span>
+                                <small class="text-muted" style="font-size: 11px;">Reste à recouvrer</small>
+                            </div>
                         </div>
-                        <div class="dash-kpi-label mb-1">Créances Impayées</div>
+                        <div class="dash-kpi-label mb-1">Créances Clients</div>
                         <div class="small text-muted d-flex justify-content-between align-items-center">
-                            <span>{{ $nombreFacturesPartielles }} paiements partiels</span>
+                            <span><strong>{{ $nombreFacturesImpayees }}</strong> impayées · {{ $nombreFacturesPartielles }} partielles</span>
                             <a href="{{ route('module_ordre_facture.index') }}" class="text-danger fw-semibold small">Relancer</a>
                         </div>
                         <div class="prog-thin mt-2">

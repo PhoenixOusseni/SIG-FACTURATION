@@ -77,6 +77,9 @@ class BordereauLivraisonController extends Controller
         });
 
         smilify('success', 'Bordereau de livraison enregistré avec succès.');
+        if ($request->has('from_hub') || $request->input('from_hub')) {
+            return redirect()->route('module_ordre_facture.index')->with('success', 'Bordereau de livraison enregistré avec succès.');
+        }
         return redirect()->route('module_bordereau_livraison.show', $bordereau->id);
     }
 
@@ -129,7 +132,7 @@ class BordereauLivraisonController extends Controller
         });
 
         smilify('success', 'Facture proforma transformée en bordereau de livraison avec succès.');
-        return redirect()->route('module_bordereau_livraison.show', $bordereau->id);
+        return redirect()->route('module_ordre_facture.index')->with('success', 'Facture proforma transformée en bordereau de livraison avec succès.');
     }
 
     /* ============================================================
@@ -184,7 +187,7 @@ class BordereauLivraisonController extends Controller
         });
 
         smilify('success', 'Bordereau de livraison transformé en facture définitive avec succès.');
-        return redirect()->route('module_ordre_facture.show', $facture->id);
+        return redirect()->route('module_ordre_facture.index')->with('success', 'Bordereau de livraison transformé en facture définitive avec succès.');
     }
 
     /* ============================================================
@@ -288,7 +291,7 @@ class BordereauLivraisonController extends Controller
         $bordereau->delete();
 
         smilify('success', 'Bordereau de livraison supprimé avec succès.');
-        return redirect()->route('module_bordereau_livraison.index');
+        return redirect()->back()->with('success', 'Bordereau de livraison supprimé avec succès.');
     }
 
     /* ============================================================

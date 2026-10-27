@@ -37,9 +37,16 @@
                         Bordereaux livraison
                     </a>
 
+                    {{-- Gestion de Caisse (Dépôts & Retraits Numéraires FEC) --}}
+                    <a title="Gestion de Caisse (Dépôts & Retraits de numéraires)" class="nav-link {{ request()->routeIs('module_caisse.*') ? 'active' : '' }}" href="{{ route('module_caisse.index') }}">
+                        <div class="nav-link-icon"><i data-feather="dollar-sign"></i></div>
+                        Caisse & Numéraires
+                        <span class="badge bg-success-subtle text-success border border-success-subtle ms-auto" style="font-size: 0.65rem;">FEC</span>
+                    </a>
+
                     {{-- Facturation Comptoir (POS) --}}
                     @php
-                        $isPosActive = request()->routeIs(['module_comptoir.*', 'module_caisse.*']);
+                        $isPosActive = request()->routeIs(['module_comptoir.*']);
                     @endphp
                     <a title="Point de Vente (POS)" class="nav-link {{ $isPosActive ? '' : 'collapsed' }}" href="javascript:void(0);"
                         data-bs-toggle="collapse" data-bs-target="#collapsePos" aria-expanded="{{ $isPosActive ? 'true' : 'false' }}">
@@ -68,9 +75,9 @@
                                     <div class="nav-link-icon"><i data-feather="list"></i></div>
                                     Tickets & Ventes
                                 </a>
-                                <a class="nav-link {{ request()->routeIs('module_caisse.*') ? 'active' : '' }}" href="{{ route('module_caisse.index') }}">
+                                <a class="nav-link {{ request()->routeIs('module_comptoir.caisses.*') ? 'active' : '' }}" href="{{ route('module_comptoir.caisses.index') }}">
                                     <div class="nav-link-icon"><i data-feather="box"></i></div>
-                                    Gestion des Caisses
+                                    Caisses de Vente (POS)
                                 </a>
                             @endif
                         </nav>

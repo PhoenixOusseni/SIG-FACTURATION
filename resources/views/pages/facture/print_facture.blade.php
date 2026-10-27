@@ -769,7 +769,7 @@
                         <td>
                             <div class="fw-bold">{{ $labelFiscal }}</div>
                         </td>
-                        <td class="text-center fw-bold">{{ number_format($qte, 0, ',', ' ') }}</td>
+                        <td class="text-center fw-bold">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
                         <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
                         <td class="text-end font-mono text-muted">{{ $tsUnit > 0 ? number_format($tsUnit * $qte, 0, ',', ' ') : '-' }}</td>
                         <td class="text-end font-mono text-danger">-</td>

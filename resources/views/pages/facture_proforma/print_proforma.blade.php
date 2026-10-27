@@ -526,7 +526,7 @@
                                 <small class="text-muted font-mono" style="font-size: 8px;">Code : {{ $codeProd }}</small>
                             @endif
                         </td>
-                        <td class="text-center fw-bold">{{ number_format($qte, 0, ',', ' ') }}</td>
+                        <td class="text-center fw-bold">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
                         <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
                         <td class="text-center font-mono">{{ $tauxTva > 0 ? $tauxTva.'%' : '0% (Exo)' }}</td>
                         <td class="text-end font-mono fw-bold">{{ number_format($ligneBrut, 0, ',', ' ') }}</td>

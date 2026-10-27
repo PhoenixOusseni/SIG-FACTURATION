@@ -43,11 +43,15 @@ class FactureController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $proformas = \App\Models\FactureProforma::with(['Contribuable', 'ElementFactureProformas.Produit', 'Facture'])
+        $proformas = \App\Models\FactureProforma::with(['Contribuable', 'ElementFactureProformas.Produit', 'Facture', 'BordereauLivraison'])
             ->orderByDesc('id')
             ->get();
 
         $avoirs = \App\Models\FactureAvoir::with(['Contribuable', 'Facture', 'ElementFactureAvoirs.Produit'])
+            ->orderByDesc('id')
+            ->get();
+
+        $bordereaux = \App\Models\BordereauLivraison::with(['Contribuable', 'Service', 'FactureProforma', 'Facture', 'ElementBordereauLivraisons.Produit'])
             ->orderByDesc('id')
             ->get();
 
@@ -103,6 +107,7 @@ class FactureController extends Controller
             'collection',
             'proformas',
             'avoirs',
+            'bordereaux',
             'facturesCertifiees',
             'facturesImpayees',
             'nbErreursMcf',
@@ -178,8 +183,11 @@ class FactureController extends Controller
                 ->orderBy('id', 'desc')
                 ->first();
 
-            $nextNumber = ($lastFacture ? intval(substr($lastFacture->code, 4, 5)) : 0) + 1;
-            $generatedCode = 'FAC-' . str_pad($nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
+            $nextNumber = 1;
+            if ($lastFacture && preg_match('/(?:FACT|FAC)-(\d+)/', $lastFacture->code, $matches)) {
+                $nextNumber = intval($matches[1]) + 1;
+            }
+            $generatedCode = 'FACT-' . str_pad($nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
 
             // Compilation des 9 lignes libres de commentaires DGI (SECeF ST 1.0)
             $notesData = [];
@@ -236,12 +244,6 @@ class FactureController extends Controller
                             'prix_unitaire' => $prixUnitaire,
                             'designation'   => $request->designation[$index] ?? null,
                         ]);
-
-                        // Décrémenter le stock global UNIQUEMENT si le produit est un bien physique
-                        $produitModel = Produit::find($produitId);
-                        if ($produitModel && $produitModel->isBien() && $quantite > 0) {
-                            $produitModel->decrement('qte', $quantite);
-                        }
                     }
                 }
             }
@@ -258,7 +260,10 @@ class FactureController extends Controller
                         $mCode = $rModes[$rIdx] ?? 'ESP';
                         $rModeObj = ModePaie::where('code', $mCode)->orWhere('libelle', $mCode)->first();
                         $lastReg = \App\Models\Reglement::whereYear('created_at', $year)->orderBy('id', 'desc')->first();
-                        $nextRNum = ($lastReg ? intval(substr($lastReg->code, 4, 5)) : 0) + 1 + $rIdx;
+                        $nextRNum = 1 + $rIdx;
+                        if ($lastReg && preg_match('/RGL-(\d+)/', $lastReg->code, $regMatches)) {
+                            $nextRNum = intval($regMatches[1]) + 1 + $rIdx;
+                        }
                         $rCode = 'RGL-' . str_pad($nextRNum, 5, '0', STR_PAD_LEFT) . '/' . $year;
 
                         \App\Models\Reglement::create([
@@ -286,6 +291,8 @@ class FactureController extends Controller
                 try {
                     $this->sfeSigner->sign($facture->fresh());
                     $certifieeDirect = true;
+                    // Décrémenter le stock physique UNIQUEMENT lorsque la certification fiscale réussit
+                    $this->decrementStockFacture($facture);
                 } catch (\Throwable $e) {
                     report($e);
                     \Log::warning('Fiscalisation MCF directe échouée à la création', [
@@ -883,51 +890,49 @@ class FactureController extends Controller
     }
 
     /**
-     * Supprimer une facture (avec ses éléments).
+     * Supprime une facture non certifiée (Brouillon ou Erreur MCF).
+     * Restitue les stocks, déverrouille le devis/proforma et nettoie la base de données.
      */
     public function destroy($id)
     {
-        $facture = Facture::findOrFail($id);
+        $facture = Facture::with(['ElementFactures.Produit', 'Reglements'])->findOrFail($id);
 
         if ($facture->isCertified()) {
             if (function_exists('smilify')) {
-                smilify('error', "La facture {$facture->code} est déjà certifiée fiscalement. Sa suppression est strictement interdite par la DGI (SECeF). Émettez un Avoir fiscal.");
+                smilify('error', "Suppression interdite par la loi fiscale DGI : la facture {$facture->code} est certifiée. Émettez un avoir d'annulation totale (RAN).");
             }
-            return redirect()->route('module_ordre_facture.show', $facture->id);
+            return redirect()->route('module_ordre_facture.index');
         }
 
-        // Une facture déjà réglée (au moins un règlement) ne peut pas être supprimée.
-        if ($facture->Reglements()->count() > 0) {
-            if (function_exists('smilify')) {
-                smilify('error', "Impossible de supprimer la facture {$facture->code} : des règlements financiers y sont déjà rattachés.");
-            }
-            return redirect()->route('module_ordre_facture.show', $facture->id);
-        }
-
-        $code = $facture->code;
-
-        // Rétablir le stock global des biens physiques uniquement (pas pour les prestations de service)
-        $elements = ElementFacture::where('facture_id', $facture->id)->get();
-        foreach ($elements as $el) {
-            if ($el->produits_id && (float) $el->quantite > 0) {
-                $prod = Produit::find($el->produits_id);
-                if ($prod && $prod->isBien()) {
-                    $prod->increment('qte', (float) $el->quantite);
+        DB::transaction(function () use ($facture, $id) {
+            // 1. Restituer le stock si décrémenté
+            foreach ($facture->ElementFactures as $element) {
+                $produit = $element->Produit;
+                if ($produit && $produit->isBien() && (float) $element->quantite > 0) {
+                    $produit->increment('qte', (float) $element->quantite);
                 }
             }
-        }
 
-        ElementFacture::where('facture_id', $facture->id)->delete();
-        $facture->delete();
+            // 2. Déverrouiller le devis / proforma d'origine s'il y a lieu
+            if ($facture->facture_proforma_id) {
+                \App\Models\FactureProforma::where('id', $facture->facture_proforma_id)->update(['statut' => 'validée']);
+            }
 
-        \App\Models\AuditLog::enregistrer('DELETE', 'FACTURE', "Suppression de la facture brouillon {$code}", $id);
+            // 3. Supprimer règlements brouillons, éléments et la facture
+            $code = $facture->code;
+            $facture->Reglements()->delete();
+            $facture->ElementFactures()->delete();
+            $facture->delete();
+
+            \App\Models\AuditLog::enregistrer('DELETE', 'FACTURE', "Suppression de la facture non certifiée {$code} et restitution des stocks.", $id);
+        });
 
         if (function_exists('smilify')) {
-            smilify('success', "Facture brouillon {$code} supprimée avec succès et stock rétabli.");
+            smilify('success', "Facture non certifiée {$facture->code} supprimée avec succès et stocks réajustés.");
         }
-
         return redirect()->route('module_ordre_facture.index');
     }
+
 
     /**
      * Création des éléments depuis un payload "tableau" du formulaire.
@@ -1031,7 +1036,8 @@ class FactureController extends Controller
 
         try {
             $this->sfeSigner->sign($facture);
-            \App\Models\AuditLog::enregistrer('SIGN', 'FACTURE', "Certification réussie de la facture {$facture->code}", $facture->id);
+            $this->decrementStockFacture($facture);
+            \App\Models\AuditLog::enregistrer('SIGN', 'FACTURE', "Certification réussie de la facture {$facture->code} et décrémentation des stocks", $facture->id);
             smilify('success', "Facture {$facture->code} certifiée avec succès par le boîtier MCF Eltrade (SECeF ST 1.0) !");
         } catch (\Throwable $e) {
             report($e);
@@ -1060,6 +1066,7 @@ class FactureController extends Controller
         foreach ($factures as $facture) {
             try {
                 $this->sfeSigner->sign($facture);
+                $this->decrementStockFacture($facture);
                 $succes++;
                 usleep(500000); // Pause de 500ms entre envois série
             } catch (\Throwable $e) {
@@ -1077,4 +1084,68 @@ class FactureController extends Controller
 
         return redirect()->route('module_ordre_facture.index');
     }
+
+    /**
+     * Décrémente le stock global UNIQUEMENT pour les biens physiques vendus.
+     */
+    protected function decrementStockFacture(Facture $facture): void
+    {
+        $facture->loadMissing('ElementFactures.Produit');
+        foreach ($facture->ElementFactures as $element) {
+            $produit = $element->Produit;
+            if ($produit && $produit->isBien() && (float) $element->quantite > 0) {
+                $produit->decrement('qte', (float) $element->quantite);
+            }
+        }
+    }
+
+    /**
+     * Annule la tentative de certification d'une facture en erreur MCF / SFE.
+     * Restitue immédiatement les stocks décrémentés, supprime les règlements en attente,
+     * et remet la facture en statut Brouillon pour correction ou suppression.
+     */
+    public function annulerErreur($id)
+    {
+        $facture = Facture::with(['ElementFactures.Produit', 'Reglements'])->findOrFail($id);
+
+        if ($facture->isCertified()) {
+            smilify('error', "La facture {$facture->code} est déjà certifiée fiscalement. Conformément à la norme DGI, une facture certifiée ne peut pas être annulée directement ; elle doit faire l'objet d'un avoir fiscal.");
+            return redirect()->route('module_ordre_facture.index');
+        }
+
+        DB::transaction(function () use ($facture) {
+            // 1. Restituer le stock physique des biens décrémentés
+            foreach ($facture->ElementFactures as $element) {
+                $produit = $element->Produit;
+                if ($produit && $produit->isBien() && (float) $element->quantite > 0) {
+                    $produit->increment('qte', (float) $element->quantite);
+                }
+            }
+
+            // 2. Supprimer les règlements attachés à cette facture non certifiée
+            $facture->Reglements()->delete();
+
+            // 3. Réinitialiser la facture en statut Brouillon et nettoyer les erreurs
+            $notes = $facture->notes;
+            if (!empty($notes) && str_starts_with(trim($notes), '{')) {
+                $notesArr = json_decode($notes, true) ?: [];
+                unset($notesArr['sfe_error']);
+                $notes = json_encode($notesArr, JSON_UNESCAPED_UNICODE);
+            }
+
+            $facture->update([
+                'statut' => 'Brouillon',
+                'notes' => $notes,
+            ]);
+
+            \App\Models\AuditLog::enregistrer('UPDATE', 'FACTURE', "Annulation tentative certification facture {$facture->code} : stocks restitués et remise en Brouillon", $facture->id);
+        });
+
+
+        if (function_exists('smilify')) {
+            smilify('success', "Facture {$facture->code} réinitialisée en Brouillon avec succès. Les stocks ont été réintégrés et les règlements en attente ont été annulés. Vous pouvez désormais la modifier ou la supprimer.");
+        }
+        return redirect()->route('module_ordre_facture.index');
+    }
 }
+

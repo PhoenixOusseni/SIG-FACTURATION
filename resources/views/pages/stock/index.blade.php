@@ -9,37 +9,43 @@
 @endsection
 
 @section('content')
-<main>
-    <header class="page-header page-header-dark header-gradient pb-10">
-        <div class="container-xl px-4">
-            <div class="page-header-content pt-4">
-                <div class="row align-items-center justify-content-between">
-                    <div class="col-auto mt-4">
-                        <h1 class="page-header-title">
-                            <div class="page-header-icon"><i data-feather="archive"></i></div>
-                            Inventaire du stock
-                        </h1>
+<main class="py-4">
+    <div class="container-xl px-4" style="margin-bottom: 8rem;">
+
+        {{-- En-tête Exécutif Harmonisé (Style Hub Facturation) --}}
+        <div class="card mb-4 border-0 shadow-sm" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border-radius: 14px; border: 1px solid #e2e8f0;">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                            <h2 class="fw-bold mb-0 text-dark" style="letter-spacing: -0.5px;">
+                                <i class="fas fa-boxes me-2 text-primary"></i>Inventaire du Stock
+                            </h2>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                <i class="fas fa-warehouse me-1"></i> Contrôle Multidépôt SFE
+                            </span>
+                        </div>
+                        <p class="text-muted mb-0 small">
+                            Suivi des mouvements, entrées, sorties, inventaires groupés et ajustements conformes aux exigences DGI.
+                        </p>
                     </div>
-                    <div class="col-auto mt-4 d-flex gap-2">
-                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalEntree">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEntree">
                             <i class="fas fa-arrow-down me-1"></i> Entrée en stock
                         </button>
-                        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalSortie">
+                        <button class="btn btn-danger fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalSortie">
                             <i class="fas fa-arrow-up me-1"></i> Sortie de stock
                         </button>
-                        <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#modalAjustementGroupe">
+                        <button class="btn btn-outline-secondary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalAjustementGroupe">
                             <i class="fas fa-layer-group me-1"></i> Inventaire groupé
                         </button>
-                        <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#modalAjustement">
+                        <button class="btn btn-outline-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalAjustement">
                             <i class="fas fa-sliders-h me-1"></i> Ajustement unitaire
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-    </header>
-
-    <div class="container-xl px-4 mt-n10" style="margin-bottom: 8rem;">
 
         {{-- Filtres --}}
         <div class="card mb-3">

@@ -109,9 +109,48 @@ class StatusSnapshotService
 
     protected function format(SfeStatusSnapshot $snapshot): array
     {
+        $connexion = $snapshot->connection_data ?: [];
+        $device = $snapshot->device_data ?: [];
+        $dgiConnected = (bool) $snapshot->dgi_connected;
+
+        $mcfState = \App\Models\McfMachineState::latest()->first();
+        
+        // Date de dernière liaison DGI constatée (ex: 20260703121946)
+        $rawDgi = trim((string) ($connexion['derniere_connexion_dgi'] ?? ''));
+        $lastSync = null;
+        if (!empty($rawDgi)) {
+            try {
+                if (strlen($rawDgi) === 14 && ctype_digit($rawDgi)) {
+                    $lastSync = \Carbon\Carbon::createFromFormat('YmdHis', $rawDgi);
+                } else {
+                    $lastSync = \Carbon\Carbon::parse($rawDgi);
+                }
+            } catch (\Throwable $e) {}
+        }
+        if (!$lastSync && $mcfState && $mcfState->derniere_connexion_serveur) {
+            $lastSync = $mcfState->derniere_connexion_serveur;
+        }
+
+        // Nombre de jours réels sans télétransmission DGI
+        $dgiDaysSince = $lastSync ? (int) $lastSync->diffInDays(now()) : 0;
+
+        // Alerte réglementaire FEC : délai maximal de tolérance hors-ligne dépassé (>= 7 jours)
+        $warn7Days = ($dgiDaysSince >= 7);
+
+        $level = $snapshot->level;
+        $message = $snapshot->message;
+        if ($warn7Days && $level === 'connected') {
+            $level = 'warning';
+            $message .= " [Alerte FEC: non synchronisé DGI depuis {$dgiDaysSince} jours (max légal 7j)]";
+        }
+
+        $lastSyncFormatted = $lastSync
+            ? $lastSync->format('d/m/Y à H:i:s')
+            : ($rawDgi ?: 'Non renseignée');
+
         return [
-            'level'               => $snapshot->level,
-            'message'             => $snapshot->message,
+            'level'               => $level,
+            'message'             => $message,
             'bridge'              => $snapshot->bridge_data ?: [],
             'device'              => $snapshot->device_data ?: [],
             'connexion'           => $snapshot->connection_data ?: [],
@@ -119,8 +158,11 @@ class StatusSnapshotService
             'ports'               => $snapshot->ports_data ?: [],
             'bridge_online'       => $snapshot->bridge_online,
             'device_ready'        => $snapshot->device_ready,
-            'dgi_connected'       => $snapshot->dgi_connected,
+            'dgi_connected'       => !$warn7Days,
             'configuration_valid' => $snapshot->configuration_valid,
+            'dgi_days_since'      => $dgiDaysSince,
+            'dgi_last_sync'       => $lastSyncFormatted,
+            'warn_7_days'         => $warn7Days,
             'erreur'              => $snapshot->last_error,
             'checked_at'          => optional($snapshot->checked_at)->toIso8601String(),
         ];

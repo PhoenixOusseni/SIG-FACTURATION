@@ -35,8 +35,9 @@ use App\Http\Controllers\Comptoir\TicketComptoirController;
 use App\Http\Controllers\Comptoir\ComptoirMetaController;
 use App\Http\Controllers\Comptoir\ConversionTicketController;
 use App\Http\Controllers\Comptoir\DashboardComptoirController;
-use App\Http\Controllers\RapportController;
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\CaisseMouvementController;
+use App\Http\Controllers\RapportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -112,6 +113,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('print_bon_livraison/{id}', [FactureController::class, 'bon_livraison'])->name('print_bon_livraison');
     Route::get('module_ordre_facture/{id}/json', [FactureController::class, 'getJson'])->name('module_ordre_facture.json');
     Route::post('module_ordre_facture/{id}/recertifier', [FactureController::class, 'recertifier'])->name('module_ordre_facture.recertifier');
+    Route::post('module_ordre_facture/{id}/annuler-erreur', [FactureController::class, 'annulerErreur'])->name('module_ordre_facture.annuler_erreur');
     Route::post('module_ordre_facture/recertifier-erreurs', [FactureController::class, 'recertifierTout'])->name('module_ordre_facture.recertifier_tout');
     Route::post('module_ordre_facture/{id}/marquer-imprimee', [FactureController::class, 'marquerImprimee'])->name('module_ordre_facture.marquer_imprimee');
 
@@ -143,6 +145,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('supp_reglement/{id}', [ReglementController::class, 'destroy'])->name('supp_reglement');
     Route::get('print_reglement/{id}', [ReglementController::class, 'print'])->name('print_reglement');
     Route::post('solder_facture/{factureId}', [ReglementController::class, 'solder'])->name('solder_facture');
+
+    // ===== Gestion de Caisse & Numéraires (Exigence FEC / SFE) =====
+    Route::get('module_caisse', [CaisseMouvementController::class, 'index'])->name('module_caisse.index');
+    Route::post('module_caisse', [CaisseMouvementController::class, 'store'])->name('module_caisse.store');
+    Route::get('module_caisse/recu/{id}', [CaisseMouvementController::class, 'printRecu'])->name('module_caisse.print_recu');
 
     Route::resource('module_utilisateur', UserController::class);
     Route::put('users/{id}', [UserController::class, 'update'])->name('users.update');
@@ -204,7 +211,7 @@ Route::middleware(['auth'])->group(function () {
 
     // ===== Facturation Comptoir (POS non-MCF) =====
     Route::middleware(['comptoir.enabled'])->group(function () {
-        Route::resource('module_caisse', CaisseController::class)->except(['create', 'edit']);
+        Route::resource('pos_caisses', CaisseController::class)->names('module_comptoir.caisses')->except(['create', 'edit']);
 
         Route::get('module_comptoir', [TicketComptoirController::class, 'pos'])->name('module_comptoir.pos');
         Route::get('module_comptoir/dashboard', [DashboardComptoirController::class, 'index'])->name('module_comptoir.dashboard');

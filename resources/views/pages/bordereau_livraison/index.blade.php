@@ -107,13 +107,13 @@
                     </div>
                     @if ($collection->count() > 0)
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
+                            <table class="table table-hover align-middle mb-0" id="bordereauxTable" style="width: 100%;">
+                                <thead class="table-light">
                                     <tr>
                                         <th>Code</th>
                                         <th>Référence</th>
                                         <th>Client</th>
-                                        <th>Depot</th>
+                                        <th>Dépôt</th>
                                         <th>Origine</th>
                                         <th>Date</th>
                                         <th>Statut</th>
@@ -123,33 +123,33 @@
                                 <tbody>
                                     @foreach ($collection as $bl)
                                         <tr>
-                                            <td><span style="font-weight:600; color:var(--primary-color);">{{ $bl->code }}</span></td>
+                                            <td><span class="fw-bold font-monospace text-primary">{{ $bl->code }}</span></td>
                                             <td>{{ $bl->reference }}</td>
-                                            <td>{{ optional($bl->Contribuable)->assujeti }}</td>
+                                            <td class="fw-semibold">{{ optional($bl->Contribuable)->assujeti }}</td>
                                             <td>{{ optional($bl->Service)->libelle ?? 'N/A' }}</td>
                                             <td>
                                                 @if ($bl->FactureProforma)
-                                                    <span class="badge bg-info">Proforma {{ $bl->FactureProforma->code }}</span>
+                                                    <span class="badge bg-info-subtle text-info border border-info-subtle">Proforma {{ $bl->FactureProforma->code }}</span>
                                                 @else
-                                                    <span class="badge bg-secondary">Direct</span>
+                                                    <span class="badge bg-light text-muted border">Direct</span>
                                                 @endif
                                             </td>
-                                            <td>{{ $bl->date }}</td>
+                                            <td data-order="{{ $bl->date ? \Carbon\Carbon::parse($bl->date)->format('Y-m-d') : '' }}">{{ $bl->date }}</td>
                                             <td>
                                                 @if ($bl->statut === 'facturé')
-                                                    <span class="badge bg-success">{{ $bl->statut }}</span>
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle">{{ $bl->statut }}</span>
                                                 @elseif ($bl->statut === 'livré')
-                                                    <span class="badge bg-primary">{{ $bl->statut }}</span>
+                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ $bl->statut }}</span>
                                                 @elseif ($bl->statut === 'annulé')
-                                                    <span class="badge bg-danger">{{ $bl->statut }}</span>
+                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">{{ $bl->statut }}</span>
                                                 @else
-                                                    <span class="badge bg-warning text-dark">{{ $bl->statut }}</span>
+                                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">{{ $bl->statut }}</span>
                                                 @endif
                                             </td>
                                             <td class="text-center">
                                                 <a href="{{ route('module_bordereau_livraison.show', $bl->id) }}"
-                                                    class="btn btn-sm btn-primary"
-                                                    style="border-radius:50%; width:32px; height:32px; padding:0; display:inline-flex; align-items:center; justify-content:center;">
+                                                    class="btn btn-sm btn-outline-primary"
+                                                    title="Consulter le bordereau">
                                                     <i class="fa fa-eye"></i>
                                                 </a>
                                             </td>
@@ -360,6 +360,47 @@
             $modal.on('shown.bs.modal', function() {
                 initSelect2($modal);
             });
+
+            // Initialisation de DataTable sur la liste des bordereaux de livraison
+            let bordereauxDataTable = null;
+            if ($.fn.DataTable && $('#bordereauxTable').length && !$.fn.DataTable.isDataTable('#bordereauxTable')) {
+                bordereauxDataTable = $('#bordereauxTable').DataTable({
+                    order: [[5, 'desc']], // Tri par date décroissante
+                    pageLength: 10,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]],
+                    columnDefs: [
+                        { targets: [7], orderable: false, searchable: false }
+                    ],
+                    language: {
+                        processing: "Traitement en cours...",
+                        search: "Recherche :",
+                        lengthMenu: "Afficher _MENU_ bordereaux",
+                        info: "Affichage de _START_ à _END_ sur _TOTAL_ bordereaux",
+                        infoEmpty: "Affichage de 0 à 0 sur 0 bordereau",
+                        infoFiltered: "(filtré sur _MAX_ bordereaux)",
+                        zeroRecords: "Aucun bordereau trouvé",
+                        emptyTable: "Aucun bordereau enregistré",
+                        paginate: {
+                            first: "Premier",
+                            previous: "<i class='fas fa-chevron-left me-1'></i> Précédent",
+                            next: "Suivant <i class='fas fa-chevron-right ms-1'></i>",
+                            last: "Dernier"
+                        }
+                    }
+                });
+            }
+
+            window.searchTable = function() {
+                const val = document.getElementById("searchInput").value;
+                if (bordereauxDataTable) {
+                    bordereauxDataTable.search(val).draw();
+                } else {
+                    const filter = val.toUpperCase();
+                    $('#bordereauxTable tbody tr').each(function() {
+                        $(this).toggle($(this).text().toUpperCase().indexOf(filter) > -1);
+                    });
+                }
+            };
 
             refreshIcons();
         });

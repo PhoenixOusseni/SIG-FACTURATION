@@ -258,20 +258,39 @@
     border-color: #334155;
 }
 [data-theme="dark"] .dataTables_wrapper .dataTables_info {
-    color: #94a3b8;
-}
-[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button {
     color: #94a3b8 !important;
 }
-[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-    background: #263147 !important;
-    color: #e2e8f0 !important;
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button,
+[data-theme="dark"] .pagination .page-item .page-link {
+    color: #94a3b8 !important;
+    background: #1e293b !important;
     border-color: #334155 !important;
 }
-[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-    background: #4a7fd4 !important;
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover,
+[data-theme="dark"] .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
+    background: #263147 !important;
+    color: #e2e8f0 !important;
+    border-color: #475569 !important;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+[data-theme="dark"] .pagination .page-item.active .page-link {
+    background: #3b82f6 !important;
     color: #fff !important;
-    border-color: #4a7fd4 !important;
+    border-color: #3b82f6 !important;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.previous,
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.next,
+[data-theme="dark"] .pagination .page-item:first-child .page-link,
+[data-theme="dark"] .pagination .page-item:last-child .page-link {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+[data-theme="dark"] .pagination .page-item.disabled .page-link {
+    background: #0f172a !important;
+    color: #64748b !important;
+    border-color: #1e293b !important;
 }
 
 /* -----------------------------------------------
