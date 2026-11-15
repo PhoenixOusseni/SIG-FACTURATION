@@ -287,11 +287,19 @@
                                     {{ optional($c->date_certification)->format('d/m/Y H:i') ?: 'N/A' }}
                                 </td>
                                 <td>
-                                    <a href="{{ route('module_ordre_facture.show', $c->facture_id) }}" class="fw-bold font-monospace text-decoration-none text-primary">
-                                        {{ optional($c->facture)->code ?: ('FAC-#' . $c->facture_id) }}
-                                    </a>
+                                    @if ($c->facture_id)
+                                        <a href="{{ route('module_ordre_facture.show', $c->facture_id) }}" class="fw-bold font-monospace text-decoration-none text-primary">
+                                            {{ optional($c->facture)->code ?: ('FAC-#' . $c->facture_id) }}
+                                        </a>
+                                    @elseif ($c->facture_avoir_id)
+                                        <a href="{{ route('module_facture_avoir.print', $c->facture_avoir_id) }}" class="fw-bold font-monospace text-decoration-none text-warning">
+                                            {{ optional($c->factureAvoir)->code ?: ('AVR-#' . $c->facture_avoir_id) }}
+                                        </a>
+                                    @else
+                                        <span class="font-monospace text-muted">—</span>
+                                    @endif
                                 </td>
-                                <td class="fw-semibold">{{ optional(optional($c->facture)->Contribuable)->assujeti ?: 'Client' }}</td>
+                                <td class="fw-semibold">{{ optional(optional($c->facture)->Contribuable)->assujeti ?: (optional(optional($c->factureAvoir)->Contribuable)->assujeti ?: 'Client') }}</td>
                                 <td class="font-monospace small">{{ $c->nim ?: 'EL02000012' }}</td>
                                 <td class="text-center font-monospace small"><span class="badge bg-light text-dark border">{{ $c->compteur_total ?: $c->compteur_facture ?: '1' }}</span></td>
                                 <td class="text-center pe-3">

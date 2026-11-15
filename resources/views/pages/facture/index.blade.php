@@ -946,7 +946,7 @@
                                             <thead class="table-light">
                                                 <tr>
                                                     <th style="width: 45px;" class="text-center">#</th>
-                                                    <th style="min-width: 380px;">Article / Prestation &bull; Classification & Groupe TVA</th>
+                                                    <th style="min-width: 380px;">Article / Prestation</th>
                                                     <th style="width: 150px;" class="text-end" id="colPriceHeader">P.U. HT (FCFA)</th>
                                                     <th style="width: 110px;" class="text-center">Quantité</th>
                                                     <th style="width: 160px;" class="text-end" id="colTotalLineHeader">Total Ligne HT</th>
@@ -1321,7 +1321,7 @@
                                 <table class="table table-sm align-middle mb-0">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Article / Prestation &bull; Classification & Groupe TVA</th>
+                                            <th>Article / Prestation</th>
                                             <th style="width: 160px;" class="text-end">P.U. HT (FCFA)</th>
                                             <th style="width: 120px;" class="text-center">Quantité</th>
                                             <th style="width: 180px;" class="text-end">Total Ligne HT</th>
@@ -2507,9 +2507,23 @@
 
             sumTotal = sumHt + sumTaxes + sumBic;
 
-            // En annulation totale RAN : égalité stricte au centime avec la facture originale
-            if (nature === 'RAN' && currentInvoiceData && currentInvoiceData.montant_total) {
-                sumTotal = currentInvoiceData.montant_total;
+            // Vérifier si retour intégral de toutes les lignes éligibles (RAM ou RAN)
+            let isAllReturned = true;
+            let countRows = 0;
+            $('.avoir-item-row').each(function() {
+                countRows++;
+                const rest = parseFloat($(this).data('rest')) || 0;
+                const qte = parseFloat($(this).find('.avoir-qte-input').val()) || 0;
+                if (Math.abs(qte - rest) > 0.001 || qte <= 0) {
+                    isAllReturned = false;
+                }
+            });
+
+            // En annulation totale RAN ou retour intégral RAM : égalité stricte au centime avec le solde disponible
+            if ((nature === 'RAN' || (nature === 'RAM' && isAllReturned && countRows > 0)) && currentInvoiceData) {
+                sumTotal = (currentInvoiceData.solde_avoir_disponible !== undefined)
+                    ? currentInvoiceData.solde_avoir_disponible
+                    : currentInvoiceData.montant_total;
             }
 
             $('#avoirTotalHt').text(Number(sumHt).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' F');

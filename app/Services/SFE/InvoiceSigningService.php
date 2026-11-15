@@ -499,7 +499,8 @@ class InvoiceSigningService
         return $facture->ElementFactures->map(function ($line) use ($discountFactor) {
             $product = $line->Produit;
             $tax = optional($product)->tva;
-            $rate = (float) optional($tax)->taux;
+            $group = strtoupper(optional($tax)->code ?: 'A');
+            $rate = in_array($group, ['A', 'D', 'E'], true) ? 0.0 : (float) optional($tax)->taux;
             $unitHtAfterDiscount = (float) $line->prix_unitaire * $discountFactor;
             $unitTtc = round($unitHtAfterDiscount * (1 + $rate / 100), 2);
             $qty = (float) $line->quantite;
@@ -544,7 +545,8 @@ class InvoiceSigningService
         return $avoir->ElementFactureAvoirs->map(function ($line) use ($discountFactor, $avoir, $rrrDesignation) {
             $product = $line->Produit;
             $tax = optional($product)->tva;
-            $rate = (float) optional($tax)->taux;
+            $group = strtoupper(optional($tax)->code ?: 'A');
+            $rate = in_array($group, ['A', 'D', 'E'], true) ? 0.0 : (float) optional($tax)->taux;
             $unitHtAfterDiscount = (float) $line->prix_unitaire * $discountFactor;
             $unitTtc = round($unitHtAfterDiscount * (1 + $rate / 100), 2);
             $qty = (float) $line->quantite;

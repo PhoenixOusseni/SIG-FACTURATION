@@ -77,10 +77,9 @@
             }
             const code = data.code ? '[' + data.code + '] ' : '';
             const desig = data.designation || ('#' + id);
-            const stock = !data.is_service ? ' (Stock: ' + (parseFloat(data.qte) || 0) + ')' : '';
             const grp = data.groupe_tva ? 'Groupe ' + data.groupe_tva + ' (' + (data.taux_tva || 0) + '%)' : 'Exonéré (0%)';
             const type = data.type_article || (data.is_service ? 'LOCSER' : 'LOCBIE');
-            return code + desig + stock + ' — [' + grp + '] — [' + type + ']';
+            return code + desig + ' — [' + grp + '] — [' + type + ']';
         },
 
         isOutOfStock: function (id) {

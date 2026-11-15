@@ -78,18 +78,17 @@ class Produit extends Model
     }
 
     /**
-     * Libellé fiscal complet et standardisé selon les normes DGI.
-     * Format : [Code] Désignation (Stock: X) — [Groupe TVA (Taux%)] — [TYPE_DGI] (Stock affiché uniquement pour les biens physiques)
+     * Libellé fiscal complet standardisé selon les normes DGI (sans mention de stock).
+     * Format : [Code] Désignation — [Groupe TVA] — [TYPE_DGI (LOCBIE/LOCSER)]
      */
     public function getLabelFiscalAttribute(): string
     {
         $code = $this->code ? "[{$this->code}] " : '';
-        $nom = $this->designation ?: 'Article sans nom';
-        $stock = $this->isBien() ? ' (Stock: ' . number_format((float) ($this->qte ?? 0), 0, ',', ' ') . ')' : '';
+        $nom = $this->designation ?: 'Article';
         $groupe = $this->getGroupeTvaLibelleAttribute();
         $type = $this->type_dgi;
 
-        return "{$code}{$nom}{$stock} — [{$groupe}] — [{$type}]";
+        return "{$code}{$nom} — [{$groupe}] — [{$type}]";
     }
 
     /**

@@ -99,10 +99,10 @@
             color: #0f172a;
         }
 
-        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (37%) */
+        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (42%) */
         .header-col-secef {
-            flex: 0 0 37%;
-            max-width: 37%;
+            flex: 0 0 42%;
+            max-width: 42%;
             min-width: 0;
         }
         .header-secef-badge {
@@ -150,26 +150,28 @@
         .secef-code-row {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
             margin-top: 1.5px;
-            white-space: nowrap;
+            flex-wrap: wrap;
         }
         .header-secef-info .sig-full {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 7px;
+            font-size: 6.8px;
             font-weight: 700;
             color: #0f172a;
-            letter-spacing: 0.2px;
+            letter-spacing: 0.1px;
             background: #fff5f5;
-            padding: 1px 4px;
+            padding: 1px 3px;
+            border: 1px solid #fca5a5;
             border-radius: 3px;
             line-height: 1.2;
+            word-break: break-all;
         }
 
-        /* Colonne 3 : Identification Document (35%) */
+        /* Colonne 3 : Identification Document (30%) */
         .header-col-doc {
-            flex: 0 0 35%;
-            max-width: 35%;
+            flex: 0 0 30%;
+            max-width: 30%;
             min-width: 0;
             text-align: right;
             display: flex;
@@ -178,15 +180,16 @@
             justify-content: center;
         }
         .doc-title {
-            font-size: 13px;
+            font-size: 11.5px;
             font-weight: 800;
             color: #b91c1c;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.2px;
             margin-bottom: 3px;
             line-height: 1.2;
             word-break: normal;
             overflow-wrap: break-word;
+            text-align: right;
         }
         .doc-number-badge {
             display: inline-block;
@@ -651,7 +654,7 @@
                 <div>
                     <span class="nature-badge">
                         @if($facture_avoir->nature_avoir === 'RRR')
-                            Nature DGI : <strong>RRR</strong> — {{ strtoupper($rrrSousType ?: 'Remise') }} ACCORDÉ(E)
+                            Nature DGI : <strong>RRR</strong>
                         @else
                             Nature DGI : <strong>{{ $facture_avoir->nature_avoir }}</strong> — {{ $natureLabel ?? 'Annulation/Retour' }}
                         @endif
@@ -705,7 +708,7 @@
             <thead>
                 <tr>
                     <th style="width: 4%;" class="text-center">#</th>
-                    <th style="width: 50%;">Article / Prestation &bull; Classification Fiscale</th>
+                    <th style="width: 50%;">Article / Prestation</th>
                     <th class="text-center" style="width: 8%;">Qté</th>
                     <th class="text-end" style="width: 14%;">P.U. HT</th>
                     <th class="text-center" style="width: 10%;">TVA</th>

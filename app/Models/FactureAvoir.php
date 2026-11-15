@@ -75,15 +75,43 @@ class FactureAvoir extends Model
 
     /**
      * Montant total TTC + BIC de l'avoir (même logique fiscale que la facture vente).
+     * Sécurisé contre tout dépassement du solde de la facture d'origine.
      */
     public function getMontantTotalAttribute(): float
     {
-        $total = 0.0;
-        $isRrr = strtoupper((string) ($this->nature_avoir ?? '')) === 'RRR';
-        $tauxBic = $isRrr ? 0.0 : (float) optional(optional($this->Facture)->Bic)->taux;
+        $factureOrigine = $this->Facture;
+        $nature = strtoupper((string) ($this->nature_avoir ?? ''));
+        $isRrr = ($nature === 'RRR');
+
+        // Cas 1 : Annulation totale RAN -> strictement égal au montant total de la facture d'origine
+        if ($nature === 'RAN' && $factureOrigine) {
+            return round((float) $factureOrigine->montant_total, 2);
+        }
+
         $elements = $this->relationLoaded('ElementFactureAvoirs')
             ? $this->getRelation('ElementFactureAvoirs')
             : $this->ElementFactureAvoirs()->with('Produit.tva')->get();
+
+        // Cas 2 : Retour complet de marchandise (RAM) où toutes les lignes de la facture sont retournées
+        if ($nature === 'RAM' && $factureOrigine && $elements->isNotEmpty()) {
+            $elementsFacture = $factureOrigine->ElementFactures;
+            if ($elementsFacture->isNotEmpty() && $elements->count() === $elementsFacture->count()) {
+                $isTotalReturn = true;
+                foreach ($elementsFacture as $fel) {
+                    $matchingAvoirEl = $elements->firstWhere('produits_id', $fel->produits_id);
+                    if (!$matchingAvoirEl || abs((float)$matchingAvoirEl->quantite - (float)$fel->quantite) > 0.001) {
+                        $isTotalReturn = false;
+                        break;
+                    }
+                }
+                if ($isTotalReturn) {
+                    return round((float) $factureOrigine->montant_total, 2);
+                }
+            }
+        }
+
+        $tauxBic = $isRrr ? 0.0 : (float) optional(optional($factureOrigine)->Bic)->taux;
+        $total = 0.0;
 
         foreach ($elements as $el) {
             $quantite = (float) $el->quantite;
@@ -100,7 +128,9 @@ class FactureAvoir extends Model
             }
             $tsTotal = $tsUnit * $quantite;
 
-            $tauxTva = (float) optional(optional($el->Produit)->tva)->taux;
+            $groupe = strtoupper((string) optional(optional($prod)->tva)->code ?: 'A');
+            $tauxTva = in_array($groupe, ['A', 'D', 'E'], true) ? 0.0 : (float) optional(optional($prod)->tva)->taux;
+
             $baseTva = $montantHt + $tsTotal;
             $tva = $baseTva * $tauxTva / 100;
             $ttc = $baseTva + $tva;
@@ -110,8 +140,14 @@ class FactureAvoir extends Model
         }
 
         $remise = (float) ($this->remise_1 ?? 0) + (float) ($this->remise_2 ?? 0);
+        $totalNet = round(max(0, $total - $remise), 2);
 
-        return round(max(0, $total - $remise), 2);
+        // Garde-fou fiscal absolu : le montant de l'avoir ne peut jamais dépasser le montant total de la facture d'origine
+        if ($factureOrigine && $totalNet > (float) $factureOrigine->montant_total) {
+            $totalNet = round((float) $factureOrigine->montant_total, 2);
+        }
+
+        return $totalNet;
     }
 
     /**
