@@ -307,8 +307,8 @@
                             this.buildOptionsHtml() +
                         '</select>' +
                     '</td>' +
-                    '<td><input class="form-control text-end prix-input font-monospace" name="' + this.options.priceName + '" type="number" step="0.01" min="0" placeholder="0.00" /></td>' +
-                    '<td><input class="form-control text-center qte-input font-monospace" name="' + this.options.qtyName + '" type="number" step="0.01" min="0.01" placeholder="1" /></td>' +
+                    '<td><input class="form-control text-end prix-input font-monospace" name="' + this.options.priceName + '" type="number" step="0.01" min="0.01" placeholder="0.00" /></td>' +
+                    '<td><input class="form-control text-center qte-input font-monospace" name="' + this.options.qtyName + '" type="number" step="0.001" min="0.001" placeholder="1" /></td>' +
                     '<td class="text-end montant-cell">0</td>' +
                     '<td class="text-center">' +
                         '<button type="button" class="btn-remove-row removeRowBtn">' +

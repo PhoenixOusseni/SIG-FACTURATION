@@ -96,7 +96,11 @@
             @if($facture->statut === 'BROUILLON')
                 PROJET DE FACTURE (BROUILLON)
             @elseif($isAvoir)
-                FACTURE D'AVOIR
+                {{ strtoupper(optional($facture->Typefacture)->code ?? '') === 'EA' ? "FACTURE D'AVOIR À L'EXPORTATION" : "FACTURE D'AVOIR" }}
+            @elseif(strtoupper(optional($facture->Typefacture)->code ?? '') === 'EV')
+                FACTURE DE VENTE À L'EXPORTATION
+            @elseif(in_array(strtoupper(optional($facture->Typefacture)->code ?? ''), ['FA', 'FT'], true))
+                FACTURE D'ACOMPTE OU D'AVANCE
             @else
                 FACTURE DE VENTE
             @endif
@@ -114,7 +118,29 @@
         <p><strong>Date :</strong> {{ \Carbon\Carbon::parse($facture->date)->format('d/m/Y') }}</p>
         <p><strong>Facture N° :</strong> {{ $facture->code }}</p>
         <p><strong>Opérateur :</strong> {{ optional($facture->User)->prenom }} {{ optional($facture->User)->nom }}</p>
-        <p><strong>Mode règlement :</strong> {{ optional($facture->ModePaie)->libelle ?? 'Espèces' }}</p>
+        <p><strong>Mode(s) convenu(s) :</strong>
+            @php
+                $modesTicket = [];
+                $rawNotesTicket = (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) ? (json_decode($facture->notes, true) ?: []) : [];
+                if (!empty($rawNotesTicket['modes_paiement_convenus']) && is_array($rawNotesTicket['modes_paiement_convenus'])) {
+                    foreach ($rawNotesTicket['modes_paiement_convenus'] as $mc) {
+                        $modesTicket[] = ($mc['libelle'] ?? $mc['mode']) . ' (' . number_format($mc['montant'], 0, ',', ' ') . ' F)';
+                    }
+                } elseif ($facture->Reglements && $facture->Reglements->isNotEmpty()) {
+                    foreach ($facture->Reglements as $r) {
+                        $modesTicket[] = ($r->mode ?: 'Paiement') . ' (' . number_format($r->montant, 0, ',', ' ') . ' F)';
+                    }
+                    if ($facture->reste_a_payer > 0.009) {
+                        $modesTicket[] = 'Crédit (' . number_format($facture->reste_a_payer, 0, ',', ' ') . ' F)';
+                    }
+                } elseif ($facture->reste_a_payer > 0.009) {
+                    $modesTicket[] = (optional($facture->ModePaie)->libelle ?: 'Espèces') . ' à terme (' . number_format($facture->reste_a_payer, 0, ',', ' ') . ' F)';
+                } else {
+                    $modesTicket[] = optional($facture->ModePaie)->libelle ?: 'Espèces';
+                }
+            @endphp
+            {{ implode(', ', $modesTicket) }}
+        </p>
         @if($isAvoir && !empty($facture->reference))
             <p style="color: #c00;"><strong>Réf. Initiale :</strong> {{ $facture->reference }}</p>
         @endif
@@ -197,12 +223,10 @@
                     <td class="text-end">{{ number_format($total_bic, 0, ',', ' ') }}</td>
                 </tr>
             @endif
-            @if($total_timbre > 0)
-                <tr>
-                    <td class="text-start">Timbre Quittance (espèces) :</td>
-                    <td class="text-end">{{ number_format($total_timbre, 0, ',', ' ') }}</td>
-                </tr>
-            @endif
+            <tr>
+                <td class="text-start" style="font-size: 8px;">Montant timbre quittance en cas de paiement en espèces :</td>
+                <td class="text-end font-mono" style="font-size: 8px;">{{ number_format($total_timbre ?? 0, 0, ',', ' ') }} FCFA</td>
+            </tr>
             @if($montant_transport > 0)
                 <tr>
                     <td class="text-start">{{ $transport_label }} :</td>
@@ -233,7 +257,7 @@
     @if(!empty($commentaires))
         <div style="font-size: 8.5px; border-top: 1px dashed #64748b; padding-top: 3px; margin-top: 3px;">
             @foreach($commentaires as $k => $v)
-                @if(!empty(trim((string)$v)))
+                @if(!is_array($v) && !in_array($k, ['mode_prix', 'modes_paiement_convenus', 'sfe_error', 'action_type', 'cert_status', 'rrr_designation', 'rrr_sous_type', 'factures_concernees']) && !empty(trim((string)$v)))
                     <div><strong>{{ $k }} :</strong> {{ $v }}</div>
                 @endif
             @endforeach
@@ -246,7 +270,7 @@
     @if($sigDgi)
         <div class="dgi-box text-center">
             <p class="fw-bold" style="font-size: 10px;">CODE SECeF / DGI</p>
-            <p style="font-size: 8.5px; font-weight: bold; margin: 2px 0;">{{ $sigDgi }}</p>
+            <p style="font-size: 8.5px; font-weight: bold; margin: 2px 0; font-family: monospace;">{{ implode('-', str_split(str_replace('-', '', $sigDgi), 4)) }}</p>
             <p>SECeF NIM : <strong>{{ $nimDgi }}</strong></p>
             <p>Compteurs : <strong>{{ $cptDgi }}</strong></p>
             <p>Date/Heure : <strong>{{ $heureDgi }}</strong></p>

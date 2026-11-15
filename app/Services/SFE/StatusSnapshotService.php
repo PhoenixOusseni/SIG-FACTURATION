@@ -99,9 +99,16 @@ class StatusSnapshotService
     {
         $snapshot = SfeStatusSnapshot::where('snapshot_key', 'current')->first();
 
-        // Si le snapshot n'existe pas ou date de plus de 30 secondes, rafraîchir en temps réel
-        if (!$snapshot || !$snapshot->checked_at || $snapshot->checked_at->diffInSeconds(now()) > 30) {
-            return $this->refresh();
+        // Ne rafraîchir de manière bloquante que si le snapshot n'existe pas du tout
+        // ou s'il date de plus de 5 minutes (300 secondes) pour éviter tout ralentissement de l'interface
+        if (!$snapshot || !$snapshot->checked_at || $snapshot->checked_at->diffInSeconds(now()) > 300) {
+            try {
+                return $this->refresh();
+            } catch (\Throwable $e) {
+                if ($snapshot) {
+                    return $this->format($snapshot);
+                }
+            }
         }
 
         return $this->format($snapshot);

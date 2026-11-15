@@ -5,7 +5,6 @@
 @endsection
 
 @section('style')
-    @include('partials.style')
     <style>
         /* ── Hub Tabs & Badges ── */
         .hub-tab-btn {
@@ -198,6 +197,11 @@
                                 <i class="fas fa-plus-circle me-1"></i> Nouvelle Facture
                             </button>
 
+                            {{-- Bouton 1 BIS : Nouvel Avoir Global / RRR --}}
+                            <button type="button" class="btn btn-warning text-dark fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#createAvoirGlobalModal" onclick="openAvoirGlobalModal()">
+                                <i class="fas fa-undo me-1"></i> Nouvel Avoir
+                            </button>
+
                             {{-- Bouton 2 : Nouveau Devis / Proforma --}}
                             <button type="button" class="btn fw-semibold shadow-sm text-white" style="background: #1d3f7f;" data-bs-toggle="modal" data-bs-target="#createProformaModal">
                                 <i class="fas fa-file-invoice me-1"></i> Nouveau Devis
@@ -326,22 +330,24 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {{-- 1. Factures de Vente (FV / EV / FT) --}}
-                                @foreach ($collection as $facture)
-                                    @php
-                                        $isCertifiee = $facture->isCertified();
-                                        $typeCode = $facture->type_code;
-                                        $totTtc = (float) $facture->montant_total;
-                                        $paye = (float) $facture->montant_paye;
-                                        $reste = (float) $facture->reste_a_payer;
-                                        $isErreur = ($facture->statut === 'Erreur MCF');
-                                        $aAvoirTotal = $facture->aAvoirTotal();
-                                        $aSubiAvoir = $facture->aSubiAvoir();
-                                        $soldeAvoirDispo = $facture->soldeAvoirDisponible();
-                                        $peutAvoir = $facture->peutSubirAvoir();
-                                        $rowType = 'FV';
-                                        $statusClass = $aAvoirTotal ? 'ANNULE' : ($isErreur ? 'ERREUR' : ($reste > 0.009 ? 'IMPAYE' : 'SOLDE'));
-                                    @endphp
+                                {{-- Liste Unifiée et Classée Chronologiquement (Date & Heure de création décroissante) --}}
+                                @foreach ($hubItems as $hubRow)
+                                    @if ($hubRow->type === 'FV')
+                                        @php
+                                            $facture = $hubRow->item;
+                                            $isCertifiee = $facture->isCertified();
+                                            $typeCode = $facture->type_code;
+                                            $totTtc = (float) $facture->montant_total;
+                                            $paye = (float) $facture->montant_paye;
+                                            $reste = (float) $facture->reste_a_payer;
+                                            $isErreur = ($facture->statut === 'Erreur MCF');
+                                            $aAvoirTotal = $facture->aAvoirTotal();
+                                            $aSubiAvoir = $facture->aSubiAvoir();
+                                            $soldeAvoirDispo = $facture->soldeAvoirDisponible();
+                                            $peutAvoir = $facture->peutSubirAvoir();
+                                            $rowType = 'FV';
+                                            $statusClass = $aAvoirTotal ? 'ANNULE' : ($isErreur ? 'ERREUR' : ($reste > 0.009 ? 'IMPAYE' : 'SOLDE'));
+                                        @endphp
                                     <tr class="hub-row" data-type="FV" data-status="{{ $statusClass }}">
                                         <td>
                                             <div class="d-flex align-items-center gap-2">
@@ -349,7 +355,7 @@
                                                 <a href="javascript:void(0)" onclick="openPreview({{ $facture->id }}, '{{ $facture->code }}', {{ $isCertifiee ? 'true' : 'false' }}, 'facture')" class="fw-bold font-monospace text-primary fs-6 text-decoration-none" title="Prévisualiser la facture">{{ $facture->code }}</a>
                                             </div>
                                         </td>
-                                        <td data-order="{{ optional($facture->date)->format('Y-m-d') }}">
+                                        <td data-order="{{ $facture->created_at ? $facture->created_at->format('Y-m-d H:i:s') : (optional($facture->date)->format('Y-m-d') . ' 00:00:00') }}">
                                             <div>{{ optional($facture->date)->format('d/m/Y') }}</div>
                                             @if ($facture->reference)
                                                  <small class="text-muted font-monospace">{{ $facture->reference }}</small>
@@ -493,22 +499,20 @@
                                             </div>
                                         </td>
                                     </tr>
-                                @endforeach
-
-                                {{-- 2. Factures d'Avoir (FA / EA) --}}
-                                @foreach ($avoirs as $avoir)
-                                    @php
-                                        $isCertifieeAvoir = (bool) ($avoir->statut === 'Fiscalisée' || $avoir->dgi_signature);
-                                        $isErreurAvoir = (bool) (str_contains(strtolower($avoir->statut ?? ''), 'erreur') || !empty($avoir->sfe_error));
-                                        $totAvoir = (float) ($avoir->montant_total ?? 0);
-                                        $natureMap = [
-                                            'RRR' => 'Remise commerciale',
-                                            'RAM' => 'Retour marchandises',
-                                            'COR' => 'Rectification',
-                                            'RAN' => 'Annulation totale',
-                                        ];
-                                        $natureLabel = $natureMap[$avoir->nature_avoir] ?? ($avoir->nature_avoir ?: 'Avoir fiscal');
-                                    @endphp
+                                    @elseif ($hubRow->type === 'FA')
+                                        @php
+                                            $avoir = $hubRow->item;
+                                            $isCertifieeAvoir = (bool) ($avoir->statut === 'Fiscalisée' || $avoir->dgi_signature);
+                                            $isErreurAvoir = (bool) (str_contains(strtolower($avoir->statut ?? ''), 'erreur') || !empty($avoir->sfe_error));
+                                            $totAvoir = (float) ($avoir->montant_total ?? 0);
+                                            $natureMap = [
+                                                'RRR' => 'Remise commerciale',
+                                                'RAM' => 'Retour marchandises',
+                                                'COR' => 'Rectification',
+                                                'RAN' => 'Annulation totale',
+                                            ];
+                                            $natureLabel = $natureMap[$avoir->nature_avoir] ?? ($avoir->nature_avoir ?: 'Avoir fiscal');
+                                        @endphp
                                     <tr class="hub-row" data-type="FA" data-status="{{ $isCertifieeAvoir ? 'CERTIFIEE' : 'BROUILLON' }}">
                                         <td>
                                             <div class="d-flex align-items-center gap-2">
@@ -516,7 +520,7 @@
                                                 <span class="fw-bold font-monospace text-warning-emphasis fs-6">{{ $avoir->code }}</span>
                                             </div>
                                         </td>
-                                        <td data-order="{{ $avoir->date ? \Carbon\Carbon::parse($avoir->date)->format('Y-m-d') : '1970-01-01' }}">
+                                        <td data-order="{{ $avoir->created_at ? $avoir->created_at->format('Y-m-d H:i:s') : ($avoir->date ? \Carbon\Carbon::parse($avoir->date)->format('Y-m-d') . ' 00:00:00' : '1970-01-01 00:00:00') }}">
                                             <div>{{ $avoir->date ? \Carbon\Carbon::parse($avoir->date)->format('d/m/Y') : 'N/A' }}</div>
                                             <small class="text-muted font-monospace">Sur : {{ optional($avoir->Facture)->code ?: 'Facture orig.' }}</small>
                                             <span class="badge bg-light text-secondary border px-1" style="font-size: 10px;">{{ $natureLabel }}</span>
@@ -568,13 +572,11 @@
                                             </div>
                                         </td>
                                     </tr>
-                                @endforeach
-
-                                {{-- 3. Devis / Factures Proforma --}}
-                                @foreach ($proformas as $proforma)
-                                    @php
-                                        $totProforma = (float) ($proforma->total_ttc ?? 0);
-                                    @endphp
+                                    @elseif ($hubRow->type === 'FP')
+                                        @php
+                                            $proforma = $hubRow->item;
+                                            $totProforma = (float) ($proforma->total_ttc ?? 0);
+                                        @endphp
                                     <tr class="hub-row" data-type="PRO" data-status="PROFORMA">
                                         <td>
                                             <div class="d-flex align-items-center gap-2">
@@ -582,7 +584,7 @@
                                                 <span class="fw-bold font-monospace text-info-emphasis fs-6">{{ $proforma->code }}</span>
                                             </div>
                                         </td>
-                                        <td data-order="{{ $proforma->date ? \Carbon\Carbon::parse($proforma->date)->format('Y-m-d') : '1970-01-01' }}">
+                                        <td data-order="{{ $proforma->created_at ? $proforma->created_at->format('Y-m-d H:i:s') : ($proforma->date ? \Carbon\Carbon::parse($proforma->date)->format('Y-m-d') . ' 00:00:00' : '1970-01-01 00:00:00') }}">
                                             <div>{{ $proforma->date ? \Carbon\Carbon::parse($proforma->date)->format('d/m/Y') : 'N/A' }}</div>
                                             @if ($proforma->reference)
                                                 <small class="text-muted font-monospace">{{ $proforma->reference }}</small>
@@ -655,18 +657,16 @@
                                             @endif
                                         </td>
                                     </tr>
-                                @endforeach
-
-                                {{-- 4. Bordereaux de Livraison (BL) --}}
-                                @foreach ($bordereaux as $bl)
-                                    @php
-                                        $totBl = $bl->ElementBordereauLivraisons->sum(function($el) {
-                                            return $el->montant_total ?? ($el->quantite * $el->prix_unitaire);
-                                        });
-                                        $isFacture = ($bl->statut === 'facturé' || $bl->facture_id);
-                                        $isLivre = ($bl->statut === 'livré');
-                                        $statusClass = $isFacture ? 'FACTURE' : ($isLivre ? 'LIVRE' : 'EN_ATTENTE');
-                                    @endphp
+                                    @elseif ($hubRow->type === 'BL')
+                                        @php
+                                            $bl = $hubRow->item;
+                                            $totBl = $bl->ElementBordereauLivraisons->sum(function($el) {
+                                                return $el->montant_total ?? ($el->quantite * $el->prix_unitaire);
+                                            });
+                                            $isFacture = ($bl->statut === 'facturé' || $bl->facture_id);
+                                            $isLivre = ($bl->statut === 'livré');
+                                            $statusClass = $isFacture ? 'FACTURE' : ($isLivre ? 'LIVRE' : 'EN_ATTENTE');
+                                        @endphp
                                     <tr class="hub-row" data-type="BL" data-status="{{ $statusClass }}">
                                         <td>
                                             <div class="d-flex align-items-center gap-2">
@@ -676,7 +676,7 @@
                                                 </a>
                                             </div>
                                         </td>
-                                        <td data-order="{{ $bl->date ? \Carbon\Carbon::parse($bl->date)->format('Y-m-d') : '1970-01-01' }}">
+                                        <td data-order="{{ $bl->created_at ? $bl->created_at->format('Y-m-d H:i:s') : ($bl->date ? \Carbon\Carbon::parse($bl->date)->format('Y-m-d') . ' 00:00:00' : '1970-01-01 00:00:00') }}">
                                             <div>{{ $bl->date ? \Carbon\Carbon::parse($bl->date)->format('d/m/Y') : 'N/A' }}</div>
                                             @if ($bl->reference)
                                                 <small class="text-muted font-monospace">{{ $bl->reference }}</small>
@@ -757,6 +757,7 @@
                                             </div>
                                         </td>
                                     </tr>
+                                    @endif
                                 @endforeach
                             </tbody>
                         </table>
@@ -834,7 +835,7 @@
                                                     <i class="fas fa-plus"></i> Nouveau Client
                                                 </button>
                                             </label>
-                                            <select name="contribuable_id" id="contribuable_id" class="form-select select2-input" required style="width:100%" onchange="validerChampsObligatoires()">
+                                            <select name="contribuable_id" id="contribuable_id" class="form-select select2-input" required style="width:100%">
                                                 <option value="">-- Sélectionner le client assujetti --</option>
                                                 @foreach ($contribuables as $contribuable)
                                                     <option value="{{ $contribuable->id }}" {{ old('contribuable_id') == $contribuable->id ? 'selected' : '' }}>
@@ -968,10 +969,10 @@
                                                                 </select>
                                                             </td>
                                                             <td>
-                                                                <input type="number" step="0.01" min="0" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" value="{{ old('prix_unitaire.' . $idx) }}" required>
+                                                                <input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" value="{{ old('prix_unitaire.' . $idx) }}" required>
                                                             </td>
                                                             <td>
-                                                                <input type="number" step="0.01" min="0.01" name="quantite[]" class="form-control qte-input text-center font-monospace" value="{{ old('quantite.' . $idx, 1) }}" required>
+                                                                <input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="{{ old('quantite.' . $idx, 1) }}" required>
                                                             </td>
                                                             <td class="text-end">
                                                                 <span class="montant-cell fw-bold font-monospace text-primary fs-6">0 FCFA</span>
@@ -997,10 +998,10 @@
                                                             </select>
                                                         </td>
                                                         <td>
-                                                            <input type="number" step="0.01" min="0" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" placeholder="0" required>
+                                                            <input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" placeholder="0" required>
                                                         </td>
                                                         <td>
-                                                            <input type="number" step="0.01" min="0.01" name="quantite[]" class="form-control qte-input text-center font-monospace" value="1" required>
+                                                            <input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="1" required>
                                                         </td>
                                                         <td class="text-end">
                                                             <span class="montant-cell fw-bold font-monospace text-primary fs-6">0 FCFA</span>
@@ -1018,106 +1019,118 @@
                                 </div>
                             </div>
 
-                            {{-- Bloc 3 : Mode de Règlement Légal & Conditions d'Encaissement (Différenciation Facturation vs Règlement) --}}
+                            {{-- Bloc 3 : Modes de Paiement Convenus (Norme DGI SECeF) & Règlement à l'Émission --}}
                             <div class="card mb-4 border-0 shadow-sm" style="border-radius: 10px;">
                                 <div class="card-header bg-white border-bottom py-3">
                                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                                         <div>
-                                            <h6 class="mb-0 fw-bold text-success"><i class="fas fa-money-bill-wave me-2"></i> 3. Mode de Paiement Légal & Condition de Règlement</h6>
-                                            <small class="text-muted">La facture porte le moyen convenu selon les règles DGI. Le client peut payer comptant, verser un acompte, ou ne rien payer (vente à terme / à crédit).</small>
+                                            <h6 class="mb-0 fw-bold text-success"><i class="fas fa-money-bill-wave me-2"></i> 3. Modes de Paiement Convenus & Règlement à l'Émission</h6>
+                                            <small class="text-muted">Norme DGI SECeF : enregistrez un ou plusieurs modes de paiement convenus (&sum; Paiements = Net TTC). Précisez ensuite le règlement sur-le-champ.</small>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="card-body">
-                                    <div class="row g-3 mb-3">
-                                        {{-- 1. Mode de paiement convenu pour la facture (exigé par la DGI) --}}
-                                        <div class="col-md-5">
-                                            <label class="form-label fw-bold">
-                                                Mode de Paiement Convenu <span class="text-danger">*</span>
-                                                <small class="text-muted fw-normal">(Mention légale DGI sur facture)</small>
-                                            </label>
-                                            <select name="modepaie_id" id="modepaie_id" class="form-select fw-semibold" required onchange="onModePaiePrincipalChange()">
-                                                <option value="">-- Sélectionner le mode de paiement --</option>
-                                                @foreach ($modepaies as $mode)
-                                                    <option value="{{ $mode->id }}" data-code="{{ $mode->code }}" {{ old('modepaie_id') == $mode->id ? 'selected' : '' }}>
-                                                        {{ $mode->code }} - {{ $mode->libelle }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
+                                    {{-- Champ technique caché pour compatibilité avec le modèle et la colonne modepaie_id --}}
+                                    <input type="hidden" name="modepaie_id" id="modepaie_id" value="{{ optional($modepaies->first())->id ?? 1 }}">
 
-                                        {{-- 2. Condition de règlement immédiat --}}
-                                        <div class="col-md-7">
-                                            <label class="form-label fw-bold">Condition de Règlement à l'Émission</label>
-                                            <div class="btn-group btn-group-sm w-100 shadow-sm" role="group">
-                                                <input type="radio" class="btn-check" name="condition_reglement" id="cond_comptant" value="COMPTANT" checked onchange="onConditionReglementChange('COMPTANT')">
-                                                <label class="btn btn-outline-success fw-bold" for="cond_comptant">
-                                                    <i class="fas fa-check-circle me-1"></i> Au Comptant (100% réglé)
-                                                </label>
-
-                                                <input type="radio" class="btn-check" name="condition_reglement" id="cond_credit" value="CREDIT" onchange="onConditionReglementChange('CREDIT')">
-                                                <label class="btn btn-outline-secondary fw-bold" for="cond_credit">
-                                                    <i class="fas fa-clock me-1"></i> À Crédit / À Terme (0 F réglé)
-                                                </label>
-
-                                                <input type="radio" class="btn-check" name="condition_reglement" id="cond_acompte" value="ACOMPTE" onchange="onConditionReglementChange('ACOMPTE')">
-                                                <label class="btn btn-outline-primary fw-bold" for="cond_acompte">
-                                                    <i class="fas fa-hand-holding-usd me-1"></i> Acompte / Partiel
-                                                </label>
-
-                                                <input type="radio" class="btn-check" name="condition_reglement" id="cond_multi" value="MULTI" onchange="onConditionReglementChange('MULTI')">
-                                                <label class="btn btn-outline-dark fw-bold" for="cond_multi">
-                                                    <i class="fas fa-layer-group me-1"></i> Multi-Moyens
-                                                </label>
-                                            </div>
-                                        </div>
+                                    {{-- 1. Modes de paiement convenus (Virement, Chèque, Mobile Money, Espèces, Carte, Crédit) --}}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label fw-bold mb-0 text-dark">
+                                            <i class="fas fa-list-ol me-1 text-primary"></i> Modes de Paiement Convenus pour la Facture <span class="text-danger">*</span>
+                                            <small class="text-muted fw-normal">(Mention légale DGI sur facture &bull; Paiement unique ou multiple)</small>
+                                        </label>
+                                        <button type="button" class="btn btn-outline-primary btn-sm fw-semibold shadow-sm" id="btnAddPaiementRow" onclick="ajouterLignePaiement()">
+                                            <i class="fas fa-plus-circle me-1"></i> Ajouter un mode (Multi-Paiement)
+                                        </button>
                                     </div>
 
-                                    {{-- Information explicative si Vente à Crédit --}}
-                                    <div id="boxNoticeCredit" class="alert alert-info py-2 px-3 small mb-3 shadow-sm" style="display: none;">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        <strong>Vente à crédit :</strong> Le client ne verse aucun montant à l'émission (0 FCFA). La facture sera certifiée avec un reste à payer égal à 100% du total TTC. Aucun reçu d'encaissement immédiat ne sera créé. Le mode convenu à l'échéance reste enregistré.
-                                    </div>
-
-                                    {{-- Tableau des versements / encaissements --}}
-                                    <div id="boxVentilationPaiements" class="table-responsive border rounded bg-white">
+                                    <div id="boxVentilationPaiements" class="table-responsive border rounded bg-white mb-2">
                                         <table class="table table-sm align-middle mb-0" id="paiementsTable">
                                             <thead class="table-light">
                                                 <tr>
-                                                    <th style="width: 250px;">Moyen d'Encaissement</th>
-                                                    <th style="width: 200px;">Montant Réglé Immédiat (FCFA)</th>
-                                                    <th>Référence / N° Chèque / Transaction</th>
-                                                    <th style="width: 60px;" class="text-center">
-                                                        <button type="button" class="btn btn-outline-success btn-sm p-1" id="btnAddPaiementRow" onclick="ajouterLignePaiement()" title="Ajouter un autre moyen" style="display: none;">
-                                                            <i class="fas fa-plus"></i>
-                                                        </button>
-                                                    </th>
+                                                    <th style="width: 280px;">Mode de Paiement Convenu <span class="text-danger">*</span></th>
+                                                    <th style="width: 220px;" class="text-end">Montant Convenu (FCFA) <span class="text-danger">*</span></th>
+                                                    <th>Référence / Coordonnées (N° Chèque, Réf Virement, N° Mobile Money...)</th>
+                                                    <th style="width: 50px;" class="text-center"></th>
                                                 </tr>
                                             </thead>
                                             <tbody id="paiementsContainer">
                                                 <tr class="paiement-row">
                                                     <td>
-                                                        <select name="reglement_mode[]" class="form-select form-select-sm reglement-mode-select">
-                                                            <option value="ESP">Espèces (Caisse)</option>
-                                                            <option value="VIR">Virement Bancaire</option>
-                                                            <option value="CHQ">Chèque Bancaire</option>
-                                                            <option value="MOM">Mobile Money (Orange/Moov)</option>
-                                                            <option value="CAR">Carte Bancaire</option>
-                                                            <option value="AUT">Autre Moyen</option>
+                                                        <select name="reglement_mode[]" class="form-select form-select-sm reglement-mode-select fw-semibold" onchange="onModePaiementRowChange(this)">
+                                                            @foreach ($modepaies as $mode)
+                                                                <option value="{{ $mode->code }}" data-id="{{ $mode->id }}" {{ $mode->code === 'ESP' ? 'selected' : '' }}>
+                                                                    {{ $mode->code }} - {{ $mode->libelle }}
+                                                                </option>
+                                                            @endforeach
                                                         </select>
                                                     </td>
                                                     <td>
-                                                        <input type="number" step="1" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()">
+                                                        <input type="number" step="1" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold text-end reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()" required>
                                                     </td>
                                                     <td>
-                                                        <input type="text" name="reglement_reference[]" class="form-control form-control-sm" placeholder="Réf transaction, N° Chèque, Opérateur...">
+                                                        <input type="text" name="reglement_reference[]" class="form-control form-control-sm" placeholder="Ex: N° Chèque, Réf Virement, Transaction Mobile...">
                                                     </td>
                                                     <td class="text-center">
-                                                        <button type="button" class="btn btn-outline-danger btn-sm p-1 btn-del-paiement" onclick="supprimerLignePaiement(this)" style="display: none;"><i class="fas fa-trash"></i></button>
+                                                        <button type="button" class="btn btn-outline-danger btn-sm p-1 btn-del-paiement" onclick="supprimerLignePaiement(this)" style="display: none;" title="Supprimer ce mode"><i class="fas fa-trash"></i></button>
                                                     </td>
                                                 </tr>
                                             </tbody>
                                         </table>
+                                    </div>
+                                    <div id="paiementBalanceNotice" class="mb-3 px-1 small"></div>
+
+                                    {{-- 2. Condition de règlement effectif sur-le-champ --}}
+                                    <div class="card border-0 bg-light p-3 rounded shadow-sm">
+                                        <label class="form-label fw-bold text-dark d-block mb-2">
+                                            <i class="fas fa-hand-holding-usd me-1 text-success"></i> Règlement Immédiat à l'Émission (Encaissement sur-le-champ) :
+                                        </label>
+                                        <div class="btn-group btn-group-sm w-100 shadow-sm mb-2" role="group">
+                                            <input type="radio" class="btn-check" name="condition_reglement" id="cond_comptant" value="COMPTANT" checked onchange="onConditionReglementChange('COMPTANT')">
+                                            <label class="btn btn-outline-success fw-bold" for="cond_comptant">
+                                                <i class="fas fa-check-circle me-1"></i> Au Comptant (100% encaissé sur-le-champ)
+                                            </label>
+
+                                            <input type="radio" class="btn-check" name="condition_reglement" id="cond_credit" value="CREDIT" onchange="onConditionReglementChange('CREDIT')">
+                                            <label class="btn btn-outline-secondary fw-bold" for="cond_credit">
+                                                <i class="fas fa-clock me-1"></i> À Crédit / À Terme (0 F encaissé à l'émission)
+                                            </label>
+
+                                            <input type="radio" class="btn-check" name="condition_reglement" id="cond_acompte" value="ACOMPTE" onchange="onConditionReglementChange('ACOMPTE')">
+                                            <label class="btn btn-outline-primary fw-bold" for="cond_acompte">
+                                                <i class="fas fa-hand-holding-usd me-1"></i> Acompte / Versement Partiel
+                                            </label>
+                                        </div>
+
+                                        {{-- Messages contextuels clairs --}}
+                                        <div id="boxNoticeComptant" class="small text-success fw-semibold">
+                                            <i class="fas fa-check me-1"></i> <strong>Règlement immédiat :</strong> Le client règle la totalité des montants selon le(s) mode(s) indiqué(s) ci-dessus. Reçu(s) d'encaissement créé(s) & facture 100% soldée.
+                                        </div>
+
+                                        <div id="boxNoticeCredit" class="small text-muted" style="display: none;">
+                                            <i class="fas fa-info-circle me-1 text-primary"></i> <strong>Vente à terme / À crédit :</strong> Le client ne verse aucun montant à l'émission (0 FCFA). <strong>Aucun règlement n'est créé</strong> dans le système. Reste à payer = 100% TTC. Les modes de paiement convenus à l'échéance figurent sur la facture.
+                                        </div>
+
+                                        <div id="boxNoticeAcompte" class="row g-2 mt-1" style="display: none;">
+                                            <div class="col-md-5">
+                                                <label class="form-label small fw-bold text-primary mb-1">Montant Acompte Réglé sur-le-champ (FCFA)</label>
+                                                <input type="number" step="1" min="1" name="acompte_montant" id="acompte_montant" class="form-control form-control-sm font-monospace fw-bold" placeholder="Montant acompte..." oninput="calculerSyntheseLive()">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold mb-1">Moyen d'encaissement de l'acompte</label>
+                                                <select name="acompte_mode" class="form-select form-select-sm">
+                                                    @foreach ($modepaies as $mode)
+                                                        @if($mode->code !== 'CRE')
+                                                            <option value="{{ $mode->code }}">{{ $mode->libelle }}</option>
+                                                        @endif
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small fw-bold mb-1">Réf / Reçu Acompte</label>
+                                                <input type="text" name="acompte_ref" class="form-control form-control-sm" placeholder="Réf reçu...">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1527,7 +1540,6 @@
                                     <option value="RAN" selected>RAN — Annulation totale de la vente (Reprise intégrale 100%)</option>
                                     <option value="RAM">RAM — Retour de marchandises (Réintègre le stock des biens)</option>
                                     <option value="COR">COR — Correction d'erreur matérielle sur facture</option>
-                                    <option value="RRR">RRR — Rabais, Remise ou Ristourne accordé (Avoir financier)</option>
                                 </select>
                                 <input type="hidden" name="motif" id="avoir_motif" value="annulation">
                             </div>
@@ -1538,52 +1550,11 @@
                             <div class="col-12">
                                 <div class="alert alert-warning py-2 px-3 small mb-2 d-flex align-items-center" id="avoir_ran_blocked_alert" style="display: none;">
                                     <i class="fas fa-exclamation-triangle me-2 text-warning fs-5"></i>
-                                    <div><strong>Annulation Totale (RAN) verrouillée :</strong> Cette facture a déjà fait l'objet d'un avoir partiel. L'annulation intégrale à 100% n'est plus autorisée. Veuillez utiliser un Retour (RAM), une Remise (RRR) ou une Correction (COR) sur les articles restants.</div>
+                                    <div><strong>Annulation Totale (RAN) verrouillée :</strong> Cette facture a déjà fait l'objet d'un avoir partiel. L'annulation intégrale à 100% n'est plus autorisée. Veuillez utiliser un Retour (RAM) ou une Correction (COR) sur les articles restants.</div>
                                 </div>
                                 <div class="alert alert-info py-2 px-3 small mb-0 d-flex align-items-center" id="avoir_nature_notice">
                                     <i class="fas fa-ban me-2 text-danger fs-5"></i>
                                     <div><strong>Annulation Totale (RAN) :</strong> Toutes les quantités sont verrouillées à 100% de la facture d'origine. Les biens seront réintégrés au stock.</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {{-- Contrôles Avancés RRR (Rabais, Remise, Ristourne) --}}
-                        <div id="quickAvoirRrrControls" class="card border-info bg-light-subtle mb-3 shadow-sm" style="display: none;">
-                            <div class="card-body p-3">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="card-title text-info fw-bold mb-0">
-                                        <i class="fas fa-tags me-1"></i> Paramétrage de la Remise Financière (RRR)
-                                    </h6>
-                                    <span class="badge bg-info-subtle text-info border border-info">Aucun mouvement de stock · PSVB = 0</span>
-                                </div>
-                                <div class="row g-2 align-items-end">
-                                    <div class="col-md-3">
-                                        <label class="form-label small fw-semibold">Nature de la réduction</label>
-                                        <select name="rrr_sous_type" id="quick_rrr_type" class="form-select form-select-sm fw-bold">
-                                            <option value="Remise commerciale">Remise commerciale</option>
-                                            <option value="Rabais">Rabais (défaut de conformité)</option>
-                                            <option value="Ristourne">Ristourne (volume périodique)</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label small fw-semibold">Unité de calcul</label>
-                                        <select id="quick_rrr_unite" class="form-select form-select-sm" onchange="onQuickRrrUnitChange()">
-                                            <option value="pourcentage">Pourcentage (%)</option>
-                                            <option value="montant">Montant fixe (FCFA)</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label small fw-semibold" id="quick_rrr_val_label">Valeur (%)</label>
-                                        <input type="number" step="any" min="0" id="quick_rrr_val" class="form-control form-control-sm font-monospace fw-bold" placeholder="Ex: 10">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <button type="button" class="btn btn-sm btn-info text-white w-100 fw-bold" onclick="appliquerRemiseGlobaleAvoir()">
-                                            <i class="fas fa-magic me-1"></i> Appliquer à la facture
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="form-text mt-1 text-muted" style="font-size: 11px;">
-                                    <i class="fas fa-shield-alt text-success me-1"></i> Règle fiscale FEC/DGI : Pas de taxe PSVB, taxes spécifiques forfaitaires exclues, recalcul proportionnel de la TVA.
                                 </div>
                             </div>
                         </div>
@@ -1691,6 +1662,182 @@
                                 <i class="fas fa-check-circle me-1"></i> Valider l'Avoir
                             </button>
                         </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {{-- ====================================================================
+             MODALE 3 BIS : NOUVEL AVOIR GLOBAL / AVOIR COMMERCIAL (RRR / MULTI-FACTURES)
+             ==================================================================== --}}
+        <div class="modal fade" id="createAvoirGlobalModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+            <div class="modal-dialog modal-xl">
+                <form action="{{ route('module_facture_avoir.store') }}" method="POST" id="createAvoirGlobalForm" class="modal-content border-0 shadow-lg">
+                    @csrf
+                    <input type="hidden" name="from_hub" value="1">
+                    <div class="modal-header text-white" style="background: linear-gradient(135deg, #b45309 0%, #78350f 100%);">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-undo fs-5 text-warning"></i>
+                            <h5 class="modal-title fw-bold text-white mb-0">Nouvel Avoir &bull; RRR / Avoir Global (Norme DGI SECeF)</h5>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <div class="modal-body p-4 bg-light">
+                        {{-- 1. Choix du client & Date --}}
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-7">
+                                <label class="form-label fw-bold">Client Bénéficiaire de l'Avoir <span class="text-danger">*</span></label>
+                                <select name="contribuables_id" id="global_avoir_client_id" class="form-select select2-avoir-client fw-semibold" required style="width: 100%;">
+                                    <option value="">-- Rechercher un client assujetti (Nom, IFU) --</option>
+                                    @foreach ($contribuables as $client)
+                                        <option value="{{ $client->id }}">{{ $client->assujeti }} {{ $client->ifu ? '(IFU: ' . $client->ifu . ')' : '' }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">Date de l'Avoir <span class="text-danger">*</span></label>
+                                <input type="date" name="date" class="form-control fw-semibold" value="{{ date('Y-m-d') }}" required>
+                            </div>
+                        </div>
+
+                        {{-- 2. Nature Fiscale de l'Avoir --}}
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-body p-3">
+                                <label class="form-label fw-bold d-block mb-2">Nature Fiscale de l'Avoir (Norme DGI)</label>
+                                <div class="btn-group btn-group-sm w-100 shadow-sm" role="group">
+                                    <input type="radio" class="btn-check" name="nature_avoir" id="global_nat_rrr" value="RRR" checked onchange="onGlobalAvoirNatureChange('RRR')">
+                                    <label class="btn btn-outline-warning fw-bold text-dark" for="global_nat_rrr">
+                                        <i class="fas fa-tags me-1"></i> RRR — Rabais, Remise ou Ristourne (Avoir Financier)
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="nature_avoir" id="global_nat_ran" value="RAN" onchange="onGlobalAvoirNatureChange('RAN')">
+                                    <label class="btn btn-outline-danger fw-bold" for="global_nat_ran">
+                                        <i class="fas fa-ban me-1"></i> RAN — Annulation sur Facture
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="nature_avoir" id="global_nat_ram" value="RAM" onchange="onGlobalAvoirNatureChange('RAM')">
+                                    <label class="btn btn-outline-primary fw-bold" for="global_nat_ram">
+                                        <i class="fas fa-boxes me-1"></i> RAM — Retour de Marchandises
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Section RRR : Paramétrage Financier Direct --}}
+                        <div id="sectionGlobalRrr">
+                            <div class="alert alert-info py-2 px-3 small mb-3 shadow-sm d-flex align-items-center">
+                                <i class="fas fa-info-circle me-2 fs-5"></i>
+                                <div>
+                                    <strong>Norme DGI SECeF :</strong> L'avoir RRR est enregistré avec la référence originale officielle <strong>« RRR »</strong>. Il n'exige pas de facture d'origine unique et n'entraîne aucun mouvement de stock physique (classé en prestation de service <code>LOCSER</code>).
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Sous-type de Réduction</label>
+                                    <select name="rrr_sous_type" id="global_rrr_sous_type" class="form-select fw-semibold" onchange="onGlobalRrrSousTypeChange()">
+                                        <option value="Ristourne commerciale sur chiffre d'affaires">Ristourne commerciale (volume/fidélité)</option>
+                                        <option value="Remise commerciale accordée">Remise commerciale exceptionnelle</option>
+                                        <option value="Rabais accordé pour non-conformité">Rabais (défaut/délai/volume)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label fw-bold">Désignation de la Ligne d'Avoir (Libre & Modifiable) <span class="text-danger">*</span></label>
+                                    <input type="text" name="rrr_designation" id="global_rrr_designation" class="form-control fw-semibold" value="Ristourne commerciale sur volume d'affaires {{ date('Y') }}" required>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Montant HT de l'Avoir (FCFA) <span class="text-danger">*</span></label>
+                                    <input type="number" step="1" min="1" name="montant_rrr_ht" id="global_rrr_montant_ht" class="form-control font-monospace fw-bold fs-6 text-primary" placeholder="Ex: 100000" oninput="calculerGlobalRrrLive()">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Régime TVA Applicable</label>
+                                    <select name="tva_id" id="global_rrr_tva" class="form-select fw-semibold" onchange="calculerGlobalRrrLive()">
+                                        @foreach ($tvas as $tva)
+                                            <option value="{{ $tva->id }}" data-taux="{{ $tva->taux }}" {{ $tva->code === 'B' ? 'selected' : '' }}>
+                                                Groupe [{{ $tva->code }}] - {{ $tva->taux }}% ({{ $tva->libelle }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Références / Factures concernées (Optionnel)</label>
+                                    <input type="text" name="factures_concernees" class="form-control" placeholder="Ex: Factures S1 {{ date('Y') }}, Contrat Annuel...">
+                                </div>
+                            </div>
+
+                            {{-- Synthèse Financière RRR --}}
+                            <div class="card border-0 shadow-sm p-3 bg-white mb-3" style="border-radius: 8px;">
+                                <div class="row text-center">
+                                    <div class="col-md-4">
+                                        <span class="text-muted small d-block">Base HT de l'Avoir</span>
+                                        <span class="fw-bold font-monospace fs-6" id="global_rrr_disp_ht">0 FCFA</span>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <span class="text-muted small d-block">Montant TVA</span>
+                                        <span class="fw-bold font-monospace fs-6 text-warning-emphasis" id="global_rrr_disp_tva">0 FCFA</span>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <span class="text-muted small d-block">NET TTC À DÉDUIRE DU CLIENT</span>
+                                        <span class="fw-bold font-monospace fs-5 text-danger" id="global_rrr_disp_ttc">0 FCFA</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Section Facture Origine (visible uniquement si RAN ou RAM) --}}
+                        <div id="sectionGlobalSurFacture" style="display: none;">
+                            <div class="alert alert-warning py-2 px-3 small mb-3 shadow-sm">
+                                <i class="fas fa-exclamation-triangle me-1"></i> Pour une annulation (RAN) ou un retour (RAM), sélectionnez une facture certifiée du client.
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Facture d'Origine à rattacher <span class="text-danger">*</span></label>
+                                <select name="facture_id" id="global_facture_id" class="form-select select2-avoir-facture" style="width: 100%;">
+                                    <option value="">-- Sélectionner une facture certifiée --</option>
+                                    @foreach ($facturesCertifiees as $fv)
+                                        <option value="{{ $fv->id }}" data-client="{{ $fv->contribuable_id }}" data-total="{{ $fv->montant_total }}">
+                                            {{ $fv->code }} &bull; {{ optional($fv->Contribuable)->assujeti }} &bull; {{ number_format($fv->montant_total, 0, ',', ' ') }} FCFA
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+
+                        {{-- Option Remboursement de Trésorerie --}}
+                        <div class="card border-0 shadow-sm p-3 bg-white mb-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="effectuer_remboursement" value="1" id="global_effectuer_remboursement" onchange="$('#globalRefundFields').toggle(this.checked)">
+                                <label class="form-check-label fw-bold ms-2" for="global_effectuer_remboursement">
+                                    Effectuer un décaissement / remboursement immédiat de caisse au client
+                                </label>
+                            </div>
+                            <div id="globalRefundFields" class="row g-2 mt-2" style="display: none;">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold">Mode de remboursement</label>
+                                    <select name="remboursement_mode" class="form-select form-select-sm">
+                                        <option value="Espèces">Espèces (Caisse)</option>
+                                        <option value="Virement Bancaire">Virement Bancaire</option>
+                                        <option value="Chèque">Chèque</option>
+                                        <option value="Mobile Money">Mobile Money</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold">Référence / Pièce de caisse</label>
+                                    <input type="text" name="remboursement_ref" class="form-control form-control-sm" placeholder="N° Bon de sortie, Chèque...">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-white border-top">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" name="action_type" value="brouillon" class="btn btn-outline-warning text-dark fw-bold">
+                            <i class="fas fa-file-alt me-1"></i> Enregistrer Brouillon
+                        </button>
+                        <button type="submit" name="action_type" value="certifier" class="btn btn-warning text-dark fw-bold px-4">
+                            <i class="fas fa-shield-alt me-1"></i> Signer & Fiscaliser MCF (DGI)
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1926,7 +2073,7 @@
                 });
 
                 hubBillingDataTable = $('#hubBillingTable').DataTable({
-                    order: [[1, 'desc']], // Tri par défaut : Date la plus récente
+                    order: [], // Pré-trié chronologiquement côté serveur (aucun réordonnancement DOM, aucun saut d'écran)
                     pageLength: 25,
                     lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]],
                     columnDefs: [
@@ -2517,6 +2664,144 @@
             modal.show();
         }
 
+        // 7 TER. Fonctions pour la Modale d'Avoir Global / RRR (Norme DGI SECeF)
+        let allFacturesCertifieesOptions = [];
+        let isSyncingAvoirSelects = false;
+
+        function initFacturesCertifieesOptionsCache() {
+            if (allFacturesCertifieesOptions.length === 0) {
+                $('#global_facture_id option').each(function() {
+                    const val = $(this).val();
+                    if (val) {
+                        allFacturesCertifieesOptions.push({
+                            id: String(val),
+                            clientId: String($(this).data('client') || ''),
+                            total: $(this).data('total'),
+                            text: $(this).text()
+                        });
+                    }
+                });
+            }
+        }
+
+        function filtrerFacturesAvoirGlobal() {
+            if (isSyncingAvoirSelects) return;
+            isSyncingAvoirSelects = true;
+            try {
+                initFacturesCertifieesOptionsCache();
+                const selectedClientId = String($('#global_avoir_client_id').val() || '');
+                const currentFactureId = String($('#global_facture_id').val() || '');
+
+                let newOptionsHtml = '<option value="">-- Sélectionner une facture certifiée --</option>';
+                let factureStillValid = false;
+
+                allFacturesCertifieesOptions.forEach(function(f) {
+                    if (!selectedClientId || f.clientId === selectedClientId) {
+                        const isSelected = (f.id === currentFactureId);
+                        if (isSelected) factureStillValid = true;
+                        newOptionsHtml += `<option value="${f.id}" data-client="${f.clientId}" data-total="${f.total}" ${isSelected ? 'selected' : ''}>${f.text}</option>`;
+                    }
+                });
+
+                $('#global_facture_id').html(newOptionsHtml);
+                if (!factureStillValid) {
+                    $('#global_facture_id').val('');
+                }
+                if ($.fn.select2 && $('#global_facture_id').hasClass('select2-hidden-accessible')) {
+                    $('#global_facture_id').trigger('change.select2');
+                }
+            } finally {
+                isSyncingAvoirSelects = false;
+            }
+        }
+
+        function openAvoirGlobalModal() {
+            const form = document.getElementById('createAvoirGlobalForm');
+            if (form) form.reset();
+            $('#global_nat_rrr').prop('checked', true);
+            onGlobalAvoirNatureChange('RRR');
+            $('#global_rrr_sous_type').val("Ristourne commerciale sur volume d'affaires {{ date('Y') }}");
+            onGlobalRrrSousTypeChange();
+
+            isSyncingAvoirSelects = true;
+            try {
+                if ($.fn.select2) {
+                    if ($('#global_avoir_client_id').hasClass('select2-hidden-accessible')) {
+                        $('#global_avoir_client_id').val('').trigger('change.select2');
+                    }
+                    if ($('#global_facture_id').hasClass('select2-hidden-accessible')) {
+                        $('#global_facture_id').val('').trigger('change.select2');
+                    }
+                }
+            } finally {
+                isSyncingAvoirSelects = false;
+            }
+
+            filtrerFacturesAvoirGlobal();
+            calculerGlobalRrrLive();
+        }
+
+        function onGlobalAvoirNatureChange(nature) {
+            if (nature === 'RRR') {
+                $('#sectionGlobalRrr').show();
+                $('#sectionGlobalSurFacture').hide();
+                $('#global_facture_id').prop('required', false);
+                $('#global_rrr_designation').prop('required', true);
+                $('#global_rrr_montant_ht').prop('required', true);
+            } else {
+                $('#sectionGlobalRrr').hide();
+                $('#sectionGlobalSurFacture').show();
+                $('#global_facture_id').prop('required', true);
+                $('#global_rrr_designation').prop('required', false);
+                $('#global_rrr_montant_ht').prop('required', false);
+                filtrerFacturesAvoirGlobal();
+            }
+        }
+
+        function onGlobalRrrSousTypeChange() {
+            const val = $('#global_rrr_sous_type').val() || '';
+            const curYear = new Date().getFullYear();
+            if (val.includes('Ristourne')) {
+                $('#global_rrr_designation').val('Ristourne commerciale sur volume d\'affaires ' + curYear);
+            } else if (val.includes('Remise')) {
+                $('#global_rrr_designation').val('Remise commerciale exceptionnelle accordée');
+            } else if (val.includes('Rabais')) {
+                $('#global_rrr_designation').val('Rabais accordé pour non-conformité ou retard');
+            }
+            calculerGlobalRrrLive();
+        }
+
+        function calculerGlobalRrrLive() {
+            const mntHt = parseFloat($('#global_rrr_montant_ht').val()) || 0;
+            const $tvaOpt = $('#global_rrr_tva option:selected');
+            const taux = parseFloat($tvaOpt.data('taux')) || 0;
+
+            const mntTva = Math.round(mntHt * (taux / 100));
+            const netTtc = Math.round(mntHt + mntTva);
+
+            $('#global_rrr_disp_ht').text(Math.round(mntHt).toLocaleString('fr-FR') + ' FCFA');
+            $('#global_rrr_disp_tva').text(Math.round(mntTva).toLocaleString('fr-FR') + ' FCFA');
+            $('#global_rrr_disp_ttc').text(Math.round(netTtc).toLocaleString('fr-FR') + ' FCFA');
+        }
+
+        function onGlobalFactureSelect(factureId) {
+            if (isSyncingAvoirSelects || !factureId) return;
+            isSyncingAvoirSelects = true;
+            try {
+                initFacturesCertifieesOptionsCache();
+                const $opt = $('#global_facture_id option:selected');
+                const clientId = $opt.data('client');
+                if (clientId && $('#global_avoir_client_id').val() != clientId) {
+                    $('#global_avoir_client_id').val(clientId);
+                    if ($.fn.select2 && $('#global_avoir_client_id').hasClass('select2-hidden-accessible')) {
+                        $('#global_avoir_client_id').trigger('change.select2');
+                    }
+                }
+            } finally {
+                isSyncingAvoirSelects = false;
+            }
+        }
+
         // 8. Conversion Proforma -> Facture de Vente dans le Formulaire Pré-rempli
         // Variables globales
         let currentModePrix = 'HT';
@@ -2589,59 +2874,37 @@
             calculerSyntheseLive();
         }
 
-        // Gestion de la condition de règlement légal (Facturation vs Règlement)
+        // Gestion de la condition de règlement effectif sur-le-champ
         function onConditionReglementChange(cond) {
             currentConditionReglement = cond;
-            const $pContainer = $('#paiementsContainer');
-
             if (cond === 'COMPTANT') {
-                $('#boxNoticeCredit').slideUp();
-                $('#boxVentilationPaiements').slideDown();
-                $('#btnAddPaiementRow').hide();
-                $('.btn-del-paiement').hide();
-                // Conserver 1 ligne de paiement égale à 100% du net à payer
-                $pContainer.find('tr.paiement-row').slice(1).remove();
-                $pContainer.find('tr.paiement-row:first .reglement-montant-input')
-                    .val(currentNetAPayer)
-                    .prop('readonly', false);
+                $('#boxNoticeComptant').show();
+                $('#boxNoticeCredit').hide();
+                $('#boxNoticeAcompte').hide();
             } else if (cond === 'CREDIT') {
-                $('#boxNoticeCredit').slideDown();
-                $('#boxVentilationPaiements').slideUp();
-                $('#btnAddPaiementRow').hide();
-                $('.btn-del-paiement').hide();
-                // 0 FCFA versé à l'émission
-                $pContainer.find('tr.paiement-row').slice(1).remove();
-                $pContainer.find('tr.paiement-row:first .reglement-montant-input').val(0);
+                $('#boxNoticeComptant').hide();
+                $('#boxNoticeCredit').show();
+                $('#boxNoticeAcompte').hide();
             } else if (cond === 'ACOMPTE') {
-                $('#boxNoticeCredit').slideUp();
-                $('#boxVentilationPaiements').slideDown();
-                $('#btnAddPaiementRow').hide();
-                $('.btn-del-paiement').hide();
-                $pContainer.find('tr.paiement-row').slice(1).remove();
-                const $firstInput = $pContainer.find('tr.paiement-row:first .reglement-montant-input');
-                $firstInput.prop('readonly', false);
-                if (parseFloat($firstInput.val()) >= currentNetAPayer) {
-                    $firstInput.val(Math.round(currentNetAPayer / 2));
+                $('#boxNoticeComptant').hide();
+                $('#boxNoticeCredit').hide();
+                $('#boxNoticeAcompte').show();
+                const $ac = $('#acompte_montant');
+                if (!$ac.val() || parseFloat($ac.val()) <= 0) {
+                    $ac.val(Math.round(currentNetAPayer / 2));
                 }
-            } else if (cond === 'MULTI') {
-                $('#boxNoticeCredit').slideUp();
-                $('#boxVentilationPaiements').slideDown();
-                $('#btnAddPaiementRow').show();
-                $('.btn-del-paiement').show();
-                $pContainer.find('tr.paiement-row .reglement-montant-input').prop('readonly', false);
             }
             calculerSyntheseLive();
         }
 
-        // Synchroniser le premier moyen de paiement avec le mode convenu légal
-        function onModePaiePrincipalChange() {
-            const selectedCode = $('#modepaie_id option:selected').data('code');
-            if (selectedCode) {
-                const $firstSelect = $('#paiementsContainer tr.paiement-row:first .reglement-mode-select');
-                if ($firstSelect.find('option[value="' + selectedCode + '"]').length) {
-                    $firstSelect.val(selectedCode);
-                }
+        // Synchroniser modepaie_id avec le premier mode convenu du tableau
+        function onModePaiementRowChange(select) {
+            const firstRowSelect = $('#paiementsContainer tr.paiement-row:first .reglement-mode-select');
+            const modeId = firstRowSelect.find('option:selected').data('id');
+            if (modeId) {
+                $('#modepaie_id').val(modeId);
             }
+            calculerSyntheseLive();
         }
 
         // 8. Conversion Proforma -> Facture de Vente dans le Formulaire Pré-rempli
@@ -2684,10 +2947,10 @@
                                         </select>
                                     </td>
                                     <td>
-                                        <input type="number" step="0.01" min="0" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" value="${pu}" required>
+                                        <input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" value="${pu}" required>
                                     </td>
                                     <td>
-                                        <input type="number" step="0.01" min="0.01" name="quantite[]" class="form-control qte-input text-center font-monospace" value="${qte}" required>
+                                        <input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="${qte}" required>
                                     </td>
                                     <td class="text-end">
                                         <span class="montant-cell fw-bold font-monospace text-primary fs-6">${tot.toLocaleString('fr-FR')} FCFA</span>
@@ -2727,98 +2990,110 @@
             $('#modePrixHt').prop('checked', true);
             currentModePrix = 'HT';
             $('#colPriceHeader').text('P.U. HT (FCFA)');
+            $('#boxNoticeComptant').show();
             $('#boxNoticeCredit').hide();
-            $('#boxVentilationPaiements').show();
-            $('#btnAddPaiementRow').hide();
+            $('#boxNoticeAcompte').hide();
 
             $('#remiseTypePct').prop('checked', true);
             $('#remiseUnitLabel').text('%');
             $('#facture_remise_valeur').val(0);
             $('#facture_remise_1').val(0);
-            $('#modepaie_id').val('');
-            $('#contribuable_id').val('');
+            $('#modepaie_id').val('{{ optional($modepaies->first())->id ?? 1 }}');
+
+            if ($.fn.select2 && $('#contribuable_id').hasClass('select2-hidden-accessible')) {
+                $('#contribuable_id').val('').trigger('change.select2');
+            } else {
+                $('#contribuable_id').val('');
+            }
             $('#typefacture_id').val('');
 
-            $('#elementsContainer').html(`
-                <tr class="element-row">
-                    <td class="text-center fw-bold text-muted row-index">1</td>
-                    <td>
-                        <select name="produits_id[]" class="form-select base-taxable-select" required>
-                            ${InvoiceLines.buildOptionsHtml()}
-                        </select>
-                    </td>
-                    <td><input type="number" step="0.01" min="0" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" placeholder="0" required></td>
-                    <td><input type="number" step="0.01" min="0.01" name="quantite[]" class="form-control qte-input text-center font-monospace" value="1" required></td>
-                    <td class="text-end"><span class="montant-cell fw-bold font-monospace text-primary fs-6">0 FCFA</span></td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-outline-danger btn-sm removeRowBtn"><i class="fas fa-trash-alt"></i></button>
-                    </td>
-                </tr>
-            `);
+            // Réinitialisation instantanée de la première ligne d'articles sans reconstruction lourde du DOM
+            const $rows = $('#elementsContainer .element-row');
+            if ($rows.length > 1) {
+                $rows.slice(1).remove();
+            } else if ($rows.length === 0) {
+                $('#elementsContainer').html(`
+                    <tr class="element-row">
+                        <td class="text-center fw-bold text-muted row-index">1</td>
+                        <td>
+                            <select name="produits_id[]" class="form-select base-taxable-select" required>
+                                ${typeof InvoiceLines !== 'undefined' ? InvoiceLines.buildOptionsHtml() : ''}
+                            </select>
+                        </td>
+                        <td><input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" placeholder="0" required></td>
+                        <td><input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="1" required></td>
+                        <td class="text-end"><span class="montant-cell fw-bold font-monospace text-primary fs-6">0 FCFA</span></td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-outline-danger btn-sm removeRowBtn"><i class="fas fa-trash-alt"></i></button>
+                        </td>
+                    </tr>
+                `);
+                if (typeof InvoiceLines !== 'undefined') InvoiceLines._initExistingSelects();
+            }
+            const $firstRow = $('#elementsContainer .element-row:first');
+            $firstRow.find('.prix-input').val('');
+            $firstRow.find('.qte-input').val('1');
+            $firstRow.find('.montant-cell').text('0 FCFA');
+            const $prodSelect = $firstRow.find('.base-taxable-select');
+            if ($.fn.select2 && $prodSelect.hasClass('select2-hidden-accessible')) {
+                $prodSelect.val('').trigger('change.select2');
+            } else {
+                $prodSelect.val('');
+            }
 
-            $('#paiementsContainer').html(`
-                <tr class="paiement-row">
-                    <td>
-                        <select name="reglement_mode[]" class="form-select form-select-sm reglement-mode-select">
-                            <option value="ESP" selected>Espèces (Caisse)</option>
-                            <option value="VIR">Virement Bancaire</option>
-                            <option value="CHQ">Chèque Bancaire</option>
-                            <option value="MOM">Mobile Money (Orange/Moov)</option>
-                            <option value="CAR">Carte Bancaire</option>
-                            <option value="AUT">Autre Moyen</option>
-                        </select>
-                    </td>
-                    <td>
-                        <input type="number" step="1" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()">
-                    </td>
-                    <td>
-                        <input type="text" name="reglement_reference[]" class="form-control form-control-sm" placeholder="Réf transaction, N° Chèque...">
-                    </td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-outline-danger btn-sm p-1 btn-del-paiement" onclick="supprimerLignePaiement(this)" style="display: none;"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>
-            `);
-            InvoiceLines._bind();
-            InvoiceLines._initExistingSelects();
+            // Réinitialisation rapide de la ligne de paiement unique
+            const $payRows = $('#paiementsContainer tr.paiement-row');
+            if ($payRows.length > 1) {
+                $payRows.slice(1).remove();
+            }
+            const $firstPay = $('#paiementsContainer tr.paiement-row:first');
+            if ($firstPay.length) {
+                $firstPay.find('.reglement-mode-select').val('ESP');
+                $firstPay.find('.reglement-montant-input').val('0');
+                $firstPay.find('input[name="reglement_reference[]"]').val('');
+                $firstPay.find('.btn-del-paiement').hide();
+            }
+
             calculerSyntheseLive();
             validerChampsObligatoires();
         }
 
-        // 10. Multi-règlements dynamiques
+        // 10. Multi-paiements / Modes convenus dynamiques
         function ajouterLignePaiement() {
+            const modesOpts = `
+                @foreach ($modepaies as $mode)
+                    <option value="{{ $mode->code }}" data-id="{{ $mode->id }}">{{ $mode->code }} - {{ $mode->libelle }}</option>
+                @endforeach
+            `;
             const rowHtml = `
                 <tr class="paiement-row">
                     <td>
-                        <select name="reglement_mode[]" class="form-select form-select-sm reglement-mode-select">
-                            <option value="ESP">Espèces (Caisse)</option>
-                            <option value="VIR">Virement Bancaire</option>
-                            <option value="CHQ">Chèque Bancaire</option>
-                            <option value="MOM">Mobile Money (Orange/Moov)</option>
-                            <option value="CAR">Carte Bancaire</option>
-                            <option value="AUT">Autre Moyen</option>
+                        <select name="reglement_mode[]" class="form-select form-select-sm reglement-mode-select fw-semibold" onchange="onModePaiementRowChange(this)">
+                            ${modesOpts}
                         </select>
                     </td>
                     <td>
-                        <input type="number" step="1" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()">
+                        <input type="number" step="1" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold text-end reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()" required>
                     </td>
                     <td>
-                        <input type="text" name="reglement_reference[]" class="form-control form-control-sm" placeholder="Réf transaction, N° Chèque...">
+                        <input type="text" name="reglement_reference[]" class="form-control form-control-sm" placeholder="Ex: N° Chèque, Réf Virement, Transaction...">
                     </td>
                     <td class="text-center">
-                        <button type="button" class="btn btn-outline-danger btn-sm p-1 btn-del-paiement" onclick="supprimerLignePaiement(this)"><i class="fas fa-trash"></i></button>
+                        <button type="button" class="btn btn-outline-danger btn-sm p-1 btn-del-paiement" onclick="supprimerLignePaiement(this)" title="Supprimer ce mode"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
             `;
             $('#paiementsContainer').append(rowHtml);
+            $('.btn-del-paiement').show();
             calculerSyntheseLive();
         }
 
         function supprimerLignePaiement(btn) {
             if ($('.paiement-row').length > 1) {
                 $(btn).closest('.paiement-row').remove();
-            } else {
-                $(btn).closest('.paiement-row').find('.reglement-montant-input').val('');
+            }
+            if ($('.paiement-row').length <= 1) {
+                $('.btn-del-paiement').hide();
             }
             calculerSyntheseLive();
         }
@@ -2836,12 +3111,18 @@
                 const prod = $(this).find('.base-taxable-select').val();
                 const qte = parseFloat($(this).find('.qte-input').val()) || 0;
                 const pu = parseFloat($(this).find('.prix-input').val());
-                if (prod && qte > 0 && !isNaN(pu) && pu >= 0) {
+                if (prod && qte > 0 && !isNaN(pu) && pu > 0) {
                     hasValidLine = true;
                 }
             });
 
-            const formValid = hasClient && hasType && hasMode && hasValidLine;
+            let totalModes = 0;
+            $('.reglement-montant-input').each(function() {
+                totalModes += parseFloat($(this).val()) || 0;
+            });
+            const modesMatch = ($('.paiement-row').length === 1) || (Math.abs(Math.round(totalModes) - currentNetAPayer) <= 1);
+
+            const formValid = hasClient && hasType && hasMode && hasValidLine && modesMatch;
 
             // 1. Bouton Brouillon : actif dès que les champs obligatoires sont renseignés
             const $btnBrouillon = $('#btnSubmitBrouillon');
@@ -2852,7 +3133,7 @@
                     'cursor': formValid ? 'pointer' : 'not-allowed'
                 });
                 if (!formValid) {
-                    $btnBrouillon.attr('title', 'Veuillez renseigner le client, le type de facture, le mode de paiement et au moins un article valide (Qté > 0 et P.U. ≥ 0).');
+                    $btnBrouillon.attr('title', 'Veuillez renseigner le client, le type de facture, le mode de paiement et au moins un article valide (Qté > 0 et P.U. > 0).');
                 } else {
                     $btnBrouillon.attr('title', 'Enregistrer cette facture en brouillon');
                 }
@@ -2983,22 +3264,48 @@
             $('#liveNetAPayer').text(Math.round(netAPayer).toLocaleString('fr-FR') + ' FCFA');
 
             // Ajustement des règlements selon la condition choisie
-            let totalRegle = 0;
-            if (currentConditionReglement === 'COMPTANT') {
+            let totalModes = 0;
+            if ($('.paiement-row').length === 1) {
                 $('#paiementsContainer tr.paiement-row:first .reglement-montant-input').val(netAPayer);
-                totalRegle = netAPayer;
-            } else if (currentConditionReglement === 'CREDIT') {
-                $('#paiementsContainer tr.paiement-row:first .reglement-montant-input').val(0);
-                totalRegle = 0;
+                totalModes = netAPayer;
             } else {
                 $('.reglement-montant-input').each(function() {
-                    totalRegle += parseFloat($(this).val()) || 0;
+                    totalModes += parseFloat($(this).val()) || 0;
                 });
+            }
+
+            // Calcul du montant réellement réglé sur-le-champ selon la condition choisie
+            let totalRegle = 0;
+            if (currentConditionReglement === 'COMPTANT') {
+                totalRegle = netAPayer;
+            } else if (currentConditionReglement === 'CREDIT') {
+                totalRegle = 0; // Aucun versement immédiat (0 FCFA encaissé)
+            } else if (currentConditionReglement === 'ACOMPTE') {
+                totalRegle = parseFloat($('#acompte_montant').val()) || 0;
             }
 
             const reste = Math.max(0, netAPayer - Math.round(totalRegle));
             $('#liveTotalPaye').text(Math.round(totalRegle).toLocaleString('fr-FR') + ' FCFA');
             $('#liveResteAPayer').text(Math.round(reste).toLocaleString('fr-FR') + ' FCFA');
+
+            const modesRound = Math.round(totalModes);
+            if (modesRound === netAPayer) {
+                let badgeTxt = (currentConditionReglement === 'CREDIT') ? 'Modes convenus conformes (Vente à terme)' : 'Égalité Stricte DGI';
+                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-success-subtle text-success border border-success-subtle fw-semibold"><span><i class="fas fa-check-circle me-1"></i> Somme des modes de paiement convenus égale au Net TTC (' + Number(netAPayer).toLocaleString('fr-FR') + ' FCFA)</span><span class="badge bg-success">' + badgeTxt + '</span></div>');
+            } else if (modesRound < netAPayer) {
+                const diff = netAPayer - modesRound;
+                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-info-subtle text-info-emphasis border border-info-subtle fw-semibold"><span><i class="fas fa-info-circle me-1"></i> Total modes convenus : ' + Number(modesRound).toLocaleString('fr-FR') + ' FCFA &bull; Écart à répartir : ' + Number(diff).toLocaleString('fr-FR') + ' FCFA</span><span class="badge bg-secondary">Ajustez les montants</span></div>');
+            } else {
+                const surplus = modesRound - netAPayer;
+                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-danger-subtle text-danger border border-danger-subtle fw-semibold"><span><i class="fas fa-exclamation-triangle me-1"></i> Dépassement : la somme des modes dépasse le Net TTC de ' + Number(surplus).toLocaleString('fr-FR') + ' FCFA</span><span class="badge bg-danger">Ajustez les montants</span></div>');
+            }
+
+            // Mettre à jour modepaie_id avec le premier mode
+            const firstRowSelect = $('#paiementsContainer tr.paiement-row:first .reglement-mode-select');
+            const modeId = firstRowSelect.find('option:selected').data('id');
+            if (modeId) {
+                $('#modepaie_id').val(modeId);
+            }
 
             validerChampsObligatoires();
         }
@@ -3192,17 +3499,40 @@
                 });
             }
 
-            // Synchronisation bidirectionnelle : Mode convenu <-> Mode de règlement en vente au comptant
-            $(document).on('change', '#paiementsContainer tr.paiement-row:first .reglement-mode-select', function() {
-                if (currentConditionReglement === 'COMPTANT') {
-                    const val = $(this).val();
-                    const $matchingOpt = $('#modepaie_id option').filter(function() {
-                        return $(this).data('code') === val;
+            // Initialisation Select2 pour la modale d'avoir global (Client & Factures avec recherche et filtrage dynamique)
+            if ($.fn.select2) {
+                initFacturesCertifieesOptionsCache();
+
+                if ($('#global_avoir_client_id').length) {
+                    $('#global_avoir_client_id').select2({
+                        placeholder: '-- Rechercher un client assujetti (Nom, IFU) --',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#createAvoirGlobalModal')
+                    }).on('select2:select select2:clear change', function() {
+                        filtrerFacturesAvoirGlobal();
                     });
-                    if ($matchingOpt.length) {
-                        $('#modepaie_id').val($matchingOpt.val());
-                    }
                 }
+
+                if ($('#global_facture_id').length) {
+                    $('#global_facture_id').select2({
+                        placeholder: '-- Rechercher une facture certifiée (Code, Client, Montant) --',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#createAvoirGlobalModal')
+                    }).on('select2:select change', function() {
+                        onGlobalFactureSelect($(this).val());
+                    });
+                }
+            }
+
+            // Synchronisation : Mode convenu principal -> champ modepaie_id
+            $(document).on('change', '#paiementsContainer tr.paiement-row:first .reglement-mode-select', function() {
+                const modeId = $(this).find('option:selected').data('id');
+                if (modeId) {
+                    $('#modepaie_id').val(modeId);
+                }
+                calculerSyntheseLive();
             });
 
             @if ((isset($errors) && $errors->any()) || session('form_error'))

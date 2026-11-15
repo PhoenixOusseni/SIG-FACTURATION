@@ -70,7 +70,12 @@ class InvoiceSigningService
 
         $commentaires = [];
         if (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) {
-            $commentaires = json_decode($facture->notes, true) ?: [];
+            $rawNotes = json_decode($facture->notes, true) ?: [];
+            foreach ($rawNotes as $k => $v) {
+                if (is_string($v) && !in_array($k, ['mode_prix', 'modes_paiement_convenus', 'sfe_error', 'action_type', 'cert_status'])) {
+                    $commentaires[$k] = $v;
+                }
+            }
         }
 
         // Keys always present (bridge sample / validators may require them even for FV).
@@ -124,6 +129,17 @@ class InvoiceSigningService
                 'dgi_compteur' => $this->formatCompteur($response),
                 'dgi_qrcode' => $response['qrcode_data'] ?? null,
             ]);
+
+            // Exigence DGI SECeF : Journal électronique disposant du Code SECeF/DGI pour chaque facture
+            $compteurFormate = $this->formatCompteur($response);
+            $codeSecef = trim(($response['nim'] ?? '') . '-' . $compteurFormate);
+            $clientNom = optional($facture->Contribuable)->assujeti ?: 'Client';
+            \App\Models\AuditLog::enregistrer(
+                'SIGN',
+                'FACTURE',
+                "Certification fiscale SFE/MCF [Code SECeF: {$codeSecef}] - Facture {$facture->code} - Client: {$clientNom} - Total TTC: " . number_format($this->netAmountSale($facture), 2, ',', ' ') . " FCFA - Signature: " . substr($response['signature'] ?? '', 0, 16) . '...',
+                $facture->id
+            );
 
             return $certification;
         });
@@ -208,7 +224,12 @@ class InvoiceSigningService
 
         $commentaires = [];
         if (!empty($avoir->notes) && str_starts_with(trim($avoir->notes), '{')) {
-            $commentaires = json_decode($avoir->notes, true) ?: [];
+            $rawNotes = json_decode($avoir->notes, true) ?: [];
+            foreach ($rawNotes as $k => $v) {
+                if (is_string($v) && !in_array($k, ['mode_prix', 'modes_paiement_convenus', 'sfe_error', 'action_type', 'cert_status', 'rrr_designation', 'rrr_sous_type', 'factures_concernees'])) {
+                    $commentaires[$k] = $v;
+                }
+            }
         }
 
         $payload = [
@@ -266,6 +287,17 @@ class InvoiceSigningService
                 'dgi_compteur' => $this->formatCompteur($response),
                 'dgi_qrcode' => $response['qrcode_data'] ?? null,
             ]);
+
+            // Exigence DGI SECeF : Journal électronique disposant du Code SECeF/DGI pour chaque avoir
+            $compteurFormate = $this->formatCompteur($response);
+            $codeSecef = trim(($response['nim'] ?? '') . '-' . $compteurFormate);
+            $clientNom = optional($avoir->Contribuable)->assujeti ?: 'Client';
+            \App\Models\AuditLog::enregistrer(
+                'SIGN',
+                'AVOIR',
+                "Certification fiscale SFE/MCF [Code SECeF: {$codeSecef}] - Avoir {$avoir->code} (Nature: {$nature}) - Client: {$clientNom} - Total TTC: " . number_format($amount, 2, ',', ' ') . " FCFA - Signature: " . substr($response['signature'] ?? '', 0, 16) . '...',
+                $avoir->id
+            );
 
             return $certification;
         });
@@ -356,6 +388,49 @@ class InvoiceSigningService
     {
         $defaultMode = optional($facture->ModePaie)->code ?: 'ESP';
 
+        // 1. Priorité aux modes de paiement convenus enregistrés sur la facture (exigés par la DGI)
+        $notes = [];
+        if (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) {
+            $notes = json_decode($facture->notes, true) ?: [];
+        }
+        if (!empty($notes['modes_paiement_convenus']) && is_array($notes['modes_paiement_convenus'])) {
+            $convenus = [];
+            $sumConvenu = 0.0;
+            foreach ($notes['modes_paiement_convenus'] as $mc) {
+                $mnt = round((float) ($mc['montant'] ?? 0), 2);
+                if ($mnt <= 0) continue;
+                $rawMode = strtoupper((string) ($mc['mode'] ?? 'ESP'));
+                $modeCode = 'ESP';
+                if ($rawMode === 'VIR' || str_contains($rawMode, 'VIR')) $modeCode = 'VIR';
+                elseif ($rawMode === 'CHQ' || str_contains($rawMode, 'CH')) $modeCode = 'CHQ';
+                elseif ($rawMode === 'CAR' || $rawMode === 'CB' || str_contains($rawMode, 'CAR')) $modeCode = 'CAR';
+                elseif ($rawMode === 'MOB' || $rawMode === 'MOM' || str_contains($rawMode, 'MOB') || str_contains($rawMode, 'ORANGE')) $modeCode = 'MOB';
+                elseif ($rawMode === 'CRE' || str_contains($rawMode, 'CR')) $modeCode = 'CRE';
+
+                $convenus[] = ['mode' => $modeCode, 'montant' => $mnt];
+                $sumConvenu += $mnt;
+            }
+            if ($convenus) {
+                if (abs($sumConvenu - $netAmount) <= 1.0) {
+                    $diff = round($netAmount - $sumConvenu, 2);
+                    $convenus[count($convenus) - 1]['montant'] = round($convenus[count($convenus) - 1]['montant'] + $diff, 2);
+                    return $convenus;
+                } elseif ($sumConvenu < $netAmount) {
+                    $diff = round($netAmount - $sumConvenu, 2);
+                    $convenus[] = ['mode' => 'CRE', 'montant' => $diff];
+                    return $convenus;
+                }
+            }
+        }
+
+        // 2. Vente 100% à crédit (aucun encaissement à l'émission)
+        $montantPaye = (float) ($facture->montant_paye ?? 0);
+        $resteAPayer = (float) ($facture->reste_a_payer ?? $netAmount);
+        if ($resteAPayer >= ($netAmount - 0.01) && $montantPaye <= 0.01) {
+            return [['mode' => 'CRE', 'montant' => $netAmount]];
+        }
+
+        // 3. Gestion des règlements réels (au comptant, partiel ou multi-moyens)
         if (method_exists($facture, 'Reglements')) {
             $reglements = $facture->Reglements()->get();
             if ($reglements->isNotEmpty()) {
@@ -366,17 +441,47 @@ class InvoiceSigningService
                     if ($montant <= 0) {
                         continue;
                     }
+
+                    // Détermination du code fiscal DGI (ESP, VIR, CHQ, CAR, MOB, CRE)
                     $mode = $defaultMode;
-                    if (!empty($reg->modepaie_id) && class_exists(\App\Models\ModePaie::class)) {
-                        $mode = optional(\App\Models\ModePaie::find($reg->modepaie_id))->code ?: $defaultMode;
+                    if (!empty($reg->mode)) {
+                        $mText = strtoupper(trim($reg->mode));
+                        $found = \App\Models\ModePaie::where('libelle', $reg->mode)
+                            ->orWhere('code', $mText)
+                            ->first();
+                        if ($found) {
+                            $mode = strtoupper($found->code);
+                        } elseif (str_contains($mText, 'VIR')) {
+                            $mode = 'VIR';
+                        } elseif (str_contains($mText, 'CH')) {
+                            $mode = 'CHQ';
+                        } elseif (str_contains($mText, 'CAR') || str_contains($mText, 'CB')) {
+                            $mode = 'CAR';
+                        } elseif (str_contains($mText, 'MOB') || str_contains($mText, 'ORANGE') || str_contains($mText, 'MOOV') || str_contains($mText, 'WAVE') || str_contains($mText, 'MOM')) {
+                            $mode = 'MOB';
+                        } elseif (str_contains($mText, 'CR')) {
+                            $mode = 'CRE';
+                        } elseif (str_contains($mText, 'ESP')) {
+                            $mode = 'ESP';
+                        }
                     }
+
                     $payments[] = ['mode' => $mode, 'montant' => $montant];
                     $sum += $montant;
                 }
+
                 if ($payments && abs($sum - $netAmount) <= 0.01) {
                     return $payments;
                 }
-                // Partial règlements: still one fiscal payment line for the full certified total.
+
+                // Exigence DGI SECeF : SFE doit s'assurer que le montant total de la facture est égal
+                // à la somme des montants par mode de paiement. Si la somme des encaissements réels est
+                // inférieure au Net à Payer (vente à crédit partiel / acompte), le reliquat est complété en 'CRE'.
+                if ($payments && $sum < $netAmount) {
+                    $diff = round($netAmount - $sum, 2);
+                    $payments[] = ['mode' => 'CRE', 'montant' => $diff];
+                    return $payments;
+                }
             }
         }
 
@@ -431,7 +536,12 @@ class InvoiceSigningService
         $discount = (float) ($avoir->remise_1 ?? 0) + (float) ($avoir->remise_2 ?? 0);
         $discountFactor = $grossHt > 0 ? max(0, $grossHt - $discount) / $grossHt : 1;
 
-        return $avoir->ElementFactureAvoirs->map(function ($line) use ($discountFactor) {
+        $rawNotes = (!empty($avoir->notes) && str_starts_with(trim($avoir->notes), '{'))
+            ? (json_decode($avoir->notes, true) ?: [])
+            : [];
+        $rrrDesignation = $rawNotes['rrr_designation'] ?? null;
+
+        return $avoir->ElementFactureAvoirs->map(function ($line) use ($discountFactor, $avoir, $rrrDesignation) {
             $product = $line->Produit;
             $tax = optional($product)->tva;
             $rate = (float) optional($tax)->taux;
@@ -443,7 +553,7 @@ class InvoiceSigningService
             }
 
             $tsUnit = 0.0;
-            if ($product) {
+            if ($product && $avoir->nature_avoir !== 'RRR') {
                 if ($product->type_ts === 'POURCENTAGE' && (float) ($product->pourcentage_ts ?? 0) > 0) {
                     $tsUnit = round(((float) $line->prix_unitaire) * ((float) $product->pourcentage_ts / 100.0), 2);
                 } else {
@@ -451,13 +561,21 @@ class InvoiceSigningService
                 }
             }
 
+            $designation = ($avoir->nature_avoir === 'RRR' && !empty($rrrDesignation))
+                ? $rrrDesignation
+                : (optional($product)->designation ?: 'Rabais, Remise ou Ristourne');
+
+            $typeArticleDgi = ($avoir->nature_avoir === 'RRR')
+                ? 'LOCSER'
+                : (optional($product)->famille_produit ?? 'LOCBIE');
+
             return [
-                'designation' => optional($product)->designation ?: 'Article',
+                'designation' => $designation,
                 'quantite' => $qty,
                 'prix_unitaire' => $unitTtc,
                 'taux_tva' => $rate,
                 'groupe_taxe' => strtoupper(optional($tax)->code ?: 'A'),
-                'type_article_dgi' => optional($product)->famille_produit ?? 'LOCBIE',
+                'type_article_dgi' => $typeArticleDgi,
                 'montant_ts' => $tsUnit,
             ];
         })->values()->all();
@@ -482,7 +600,8 @@ class InvoiceSigningService
      */
     protected function buildReferenceOriginale(string $nature, ?McfCertification $originalCert): string
     {
-        if ($nature === SfeInvoiceType::NATURE_RRR && !$originalCert) {
+        // Exigence DGI SECeF : les avoirs RRR (Rabais, Remise, Ristourne) ont toujours la référence 'RRR'
+        if ($nature === SfeInvoiceType::NATURE_RRR || $nature === 'RRR' || str_contains(strtoupper($nature), 'RRR')) {
             return 'RRR';
         }
 

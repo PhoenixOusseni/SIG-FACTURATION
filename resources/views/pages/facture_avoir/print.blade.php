@@ -99,10 +99,10 @@
             color: #0f172a;
         }
 
-        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (40%) */
+        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (37%) */
         .header-col-secef {
-            flex: 0 0 40%;
-            max-width: 40%;
+            flex: 0 0 37%;
+            max-width: 37%;
             min-width: 0;
         }
         .header-secef-badge {
@@ -166,10 +166,10 @@
             line-height: 1.2;
         }
 
-        /* Colonne 3 : Identification Document (30%) */
+        /* Colonne 3 : Identification Document (35%) */
         .header-col-doc {
-            flex: 0 0 30%;
-            max-width: 30%;
+            flex: 0 0 35%;
+            max-width: 35%;
             min-width: 0;
             text-align: right;
             display: flex;
@@ -178,14 +178,15 @@
             justify-content: center;
         }
         .doc-title {
-            font-size: 14.5px;
+            font-size: 13px;
             font-weight: 800;
             color: #b91c1c;
             text-transform: uppercase;
             letter-spacing: 0.3px;
             margin-bottom: 3px;
             line-height: 1.2;
-            white-space: nowrap;
+            word-break: normal;
+            overflow-wrap: break-word;
         }
         .doc-number-badge {
             display: inline-block;
@@ -595,6 +596,7 @@
 
     @php
         $sigDgi = $certif?->sig;
+        $sigDgiFormatted = $sigDgi ? implode('-', str_split(str_replace('-', '', $sigDgi), 4)) : null;
         $nimDgi = $certif?->nim;
         $cptDgi = $certif ? ($certif->compteur_facture . '/' . $certif->compteur_total . ' ' . $certif->type_facture) : null;
         $heureDgi = $certif?->date_certification?->format('d/m/Y H:i:s');
@@ -629,7 +631,7 @@
                         <div><strong>Machine :</strong> <span class="font-mono">{{ $nimDgi }}</span></div>
                         <div><strong>Compteurs :</strong> <span class="font-mono">{{ $cptDgi }}</span></div>
                         @if($heureDgi)<div><strong>Date :</strong> {{ $heureDgi }}</div>@endif
-                        <div class="secef-code-row"><strong>CODE SECeF DGI :</strong> <span class="sig-full">{{ $sigDgi }}</span></div>
+                        <div class="secef-code-row"><strong>CODE SECeF DGI :</strong> <span class="sig-full">{{ $sigDgiFormatted }}</span></div>
                     </div>
                 </div>
                 @endif
@@ -638,8 +640,8 @@
             <!-- Colonne 3 : Identification Document (30%) -->
             <div class="header-col-doc">
                 <div class="doc-title">
-                    @if($facture_avoir->nature_avoir === 'RRR')
-                        AVOIR FINANCIER — {{ strtoupper($rrrSousType ?: 'REMISE') }}
+                    @if(($factureOrigine && optional($factureOrigine->Typefacture)->code === 'EV') || str_starts_with($facture_avoir->code, 'EA'))
+                        FACTURE D'AVOIR À L'EXPORTATION
                     @else
                         FACTURE D'AVOIR
                     @endif

@@ -195,7 +195,7 @@
 <script src="{{ asset('js/jquery-3.5.1.js') }}"></script>
 
 <link href="{{ asset('vendor/select2/select2.min.css') }}" rel="stylesheet" />
-<script src="{{ asset('vendor/select2/select2.min.js') }}" defer></script>
+<script src="{{ asset('vendor/select2/select2.min.js') }}"></script>
 
 {{-- <script>
 	$(document).ready(function() {

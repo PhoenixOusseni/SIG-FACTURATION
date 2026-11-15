@@ -47,13 +47,46 @@ class FactureController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $avoirs = \App\Models\FactureAvoir::with(['Contribuable', 'Facture', 'ElementFactureAvoirs.Produit'])
+        $avoirs = \App\Models\FactureAvoir::with(['Contribuable', 'Facture', 'ElementFactureAvoirs.Produit', 'McfCertifications'])
             ->orderByDesc('id')
             ->get();
 
         $bordereaux = \App\Models\BordereauLivraison::with(['Contribuable', 'Service', 'FactureProforma', 'Facture', 'ElementBordereauLivraisons.Produit'])
             ->orderByDesc('id')
             ->get();
+
+        // Construction de la liste unifiée et triée chronologiquement (date et heure décroissante)
+        // Élimine l'effet de réorganisation/double chargement et garantit un affichage instantané
+        $hubItems = collect();
+        foreach ($collection as $f) {
+            $hubItems->push((object)[
+                'type' => 'FV',
+                'timestamp' => $f->created_at ? $f->created_at->timestamp : ($f->date ? \Carbon\Carbon::parse($f->date)->timestamp : 0),
+                'item' => $f,
+            ]);
+        }
+        foreach ($avoirs as $av) {
+            $hubItems->push((object)[
+                'type' => 'FA',
+                'timestamp' => $av->created_at ? $av->created_at->timestamp : ($av->date ? \Carbon\Carbon::parse($av->date)->timestamp : 0),
+                'item' => $av,
+            ]);
+        }
+        foreach ($proformas as $fp) {
+            $hubItems->push((object)[
+                'type' => 'FP',
+                'timestamp' => $fp->created_at ? $fp->created_at->timestamp : ($fp->date ? \Carbon\Carbon::parse($fp->date)->timestamp : 0),
+                'item' => $fp,
+            ]);
+        }
+        foreach ($bordereaux as $bl) {
+            $hubItems->push((object)[
+                'type' => 'BL',
+                'timestamp' => $bl->created_at ? $bl->created_at->timestamp : ($bl->date_livraison ? \Carbon\Carbon::parse($bl->date_livraison)->timestamp : 0),
+                'item' => $bl,
+            ]);
+        }
+        $hubItems = $hubItems->sortByDesc('timestamp')->values();
 
         // Factures certifiées pour le modal d'avoir (uniquement celles pouvant encore subir un avoir)
         $facturesCertifiees = $collection->filter(function ($f) {
@@ -108,6 +141,7 @@ class FactureController extends Controller
             'proformas',
             'avoirs',
             'bordereaux',
+            'hubItems',
             'facturesCertifiees',
             'facturesImpayees',
             'nbErreursMcf',
@@ -130,11 +164,7 @@ class FactureController extends Controller
      */
     public function all_facture()
     {
-        $collection = Facture::with(['Contribuable', 'Service', 'Categorie', 'Typefacture', 'ModePaie', 'Bic'])
-            ->orderByDesc('id')
-            ->get();
-
-        return view('pages.facture.liste', compact('collection'));
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -248,33 +278,80 @@ class FactureController extends Controller
                 }
             }
 
-            // Gestion des règlements multiples (Multi-mode de paiement)
-            if ($request->has('reglement_montant') && is_array($request->reglement_montant)) {
-                $rModes = (array) $request->input('reglement_mode', []);
-                $rMontants = (array) $request->input('reglement_montant', []);
-                $rRefs = (array) $request->input('reglement_reference', []);
+            // 1. Sauvegarde des modes de paiement convenus (Norme DGI SECeF : mention légale sur facture)
+            $condReglement = $request->input('condition_reglement', 'COMPTANT');
+            $rModes = (array) $request->input('reglement_mode', []);
+            $rMontants = (array) $request->input('reglement_montant', []);
+            $rRefs = (array) $request->input('reglement_reference', []);
 
-                foreach ($rMontants as $rIdx => $rMnt) {
-                    $rMnt = (float) $rMnt;
-                    if ($rMnt > 0) {
-                        $mCode = $rModes[$rIdx] ?? 'ESP';
-                        $rModeObj = ModePaie::where('code', $mCode)->orWhere('libelle', $mCode)->first();
+            $modesConvenus = [];
+            foreach ($rMontants as $rIdx => $rMnt) {
+                $rMnt = (float) $rMnt;
+                if ($rMnt > 0) {
+                    $mCode = strtoupper((string) ($rModes[$rIdx] ?? 'ESP'));
+                    $rModeObj = ModePaie::where('code', $mCode)->orWhere('libelle', $mCode)->first();
+                    $modesConvenus[] = [
+                        'mode' => $mCode,
+                        'libelle' => $rModeObj ? $rModeObj->libelle : $mCode,
+                        'montant' => $rMnt,
+                        'reference' => $rRefs[$rIdx] ?? null,
+                    ];
+                }
+            }
+            if (!empty($modesConvenus)) {
+                $notesData['modes_paiement_convenus'] = $modesConvenus;
+                $facture->update(['notes' => json_encode($notesData, JSON_UNESCAPED_UNICODE)]);
+            }
+
+            // 2. Gestion des règlements effectifs (encaissements sur-le-champ)
+            // SI $condReglement === 'CREDIT', aucun règlement n'est créé (0 FCFA versé à l'émission)
+            if ($condReglement !== 'CREDIT') {
+                if ($condReglement === 'ACOMPTE' && $request->filled('acompte_montant')) {
+                    $acMnt = (float) $request->input('acompte_montant', 0);
+                    $acMode = strtoupper((string) $request->input('acompte_mode', 'ESP'));
+                    $acRef = $request->input('acompte_ref');
+                    if ($acMnt > 0) {
                         $lastReg = \App\Models\Reglement::whereYear('created_at', $year)->orderBy('id', 'desc')->first();
-                        $nextRNum = 1 + $rIdx;
+                        $nextRNum = 1;
                         if ($lastReg && preg_match('/RGL-(\d+)/', $lastReg->code, $regMatches)) {
-                            $nextRNum = intval($regMatches[1]) + 1 + $rIdx;
+                            $nextRNum = intval($regMatches[1]) + 1;
                         }
                         $rCode = 'RGL-' . str_pad($nextRNum, 5, '0', STR_PAD_LEFT) . '/' . $year;
+                        $rModeObj = ModePaie::where('code', $acMode)->orWhere('libelle', $acMode)->first();
 
                         \App\Models\Reglement::create([
                             'code' => $rCode,
                             'date' => $request->date ?? date('Y-m-d'),
-                            'mode' => $rModeObj ? $rModeObj->libelle : $mCode,
-                            'montant' => $rMnt,
-                            'reference_paiement' => $rRefs[$rIdx] ?? null,
+                            'mode' => $rModeObj ? $rModeObj->libelle : $acMode,
+                            'montant' => $acMnt,
+                            'reference_paiement' => $acRef,
                             'facture_id' => $facture->id,
                             'users_id' => auth()->id() ?? $request->user_id,
                         ]);
+                    }
+                } else {
+                    foreach ($modesConvenus as $rIdx => $mc) {
+                        $rMnt = (float) $mc['montant'];
+                        $mCode = $mc['mode'];
+                        // Les lignes de crédit ('CRE') représentent un différé de paiement et ne créent pas d'encaissement immédiat
+                        if ($rMnt > 0 && $mCode !== 'CRE') {
+                            $lastReg = \App\Models\Reglement::whereYear('created_at', $year)->orderBy('id', 'desc')->first();
+                            $nextRNum = 1 + $rIdx;
+                            if ($lastReg && preg_match('/RGL-(\d+)/', $lastReg->code, $regMatches)) {
+                                $nextRNum = intval($regMatches[1]) + 1 + $rIdx;
+                            }
+                            $rCode = 'RGL-' . str_pad($nextRNum, 5, '0', STR_PAD_LEFT) . '/' . $year;
+
+                            \App\Models\Reglement::create([
+                                'code' => $rCode,
+                                'date' => $request->date ?? date('Y-m-d'),
+                                'mode' => $mc['libelle'] ?? $mCode,
+                                'montant' => $rMnt,
+                                'reference_paiement' => $mc['reference'] ?? null,
+                                'facture_id' => $facture->id,
+                                'users_id' => auth()->id() ?? $request->user_id,
+                            ]);
+                        }
                     }
                 }
             }

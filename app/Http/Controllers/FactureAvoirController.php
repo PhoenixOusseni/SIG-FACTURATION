@@ -173,11 +173,7 @@ class FactureAvoirController extends Controller
      */
     public function all_facture()
     {
-        $collection = FactureAvoir::with(['Contribuable', 'Facture', 'User'])
-            ->orderByDesc('id')
-            ->get();
-
-        return view('pages.facture_avoir.liste', compact('collection'));
+        return redirect()->route('module_ordre_facture.index');
     }
 
     /**
@@ -190,8 +186,8 @@ class FactureAvoirController extends Controller
             ?: 'RAN';
 
         $facture_avoir_result = DB::transaction(function () use ($request, $nature) {
-            $factureOrigine = Facture::findOrFail($request->facture_id);
-            if ($factureOrigine->aAvoirTotal()) {
+            $factureOrigine = $request->filled('facture_id') ? Facture::find($request->facture_id) : null;
+            if ($factureOrigine && $factureOrigine->aAvoirTotal()) {
                 throw new \Exception("La facture {$factureOrigine->code} a déjà été intégralement annulée par un avoir précédent.");
             }
 
@@ -221,24 +217,41 @@ class FactureAvoirController extends Controller
             if ($request->filled('rrr_sous_type')) {
                 $notesData['rrr_sous_type'] = trim($request->input('rrr_sous_type'));
             }
+            if ($request->filled('rrr_designation')) {
+                $notesData['rrr_designation'] = trim($request->input('rrr_designation'));
+            }
+            if ($request->filled('factures_concernees')) {
+                $notesData['factures_concernees'] = trim($request->input('factures_concernees'));
+            }
             $notesJson = !empty($notesData) ? json_encode($notesData, JSON_UNESCAPED_UNICODE) : null;
 
             $remise1 = $request->filled('remise_1') ? (float) $request->remise_1 : (float) ($factureOrigine->remise_1 ?? 0);
             $remise2 = $request->filled('remise_2') ? (float) $request->remise_2 : (float) ($factureOrigine->remise_2 ?? 0);
 
             $motifFinal = $request->motif ?? $nature;
-            if ($nature === 'RRR' && $request->filled('rrr_sous_type')) {
-                $motifFinal = trim($request->input('rrr_sous_type'));
+            if ($nature === 'RRR') {
+                if ($request->filled('rrr_designation')) {
+                    $motifFinal = trim($request->input('rrr_designation'));
+                } elseif ($request->filled('rrr_sous_type')) {
+                    $motifFinal = trim($request->input('rrr_sous_type'));
+                }
+            }
+
+            $referenceFinale = $request->reference;
+            if ($nature === 'RRR') {
+                $referenceFinale = 'RRR';
+            } elseif (empty($referenceFinale) && $factureOrigine) {
+                $referenceFinale = $factureOrigine->code;
             }
 
             $facture_avoir = FactureAvoir::create([
                 'code'             => $generatedCode,
-                'reference'        => $request->reference,
+                'reference'        => $referenceFinale,
                 'date'             => $request->date ?? now()->format('Y-m-d'),
                 'statut'           => $request->statut ?? 'en attente',
                 'users_id'         => auth()->id(),
                 'contribuables_id' => $request->contribuables_id,
-                'facture_id'       => $request->facture_id,
+                'facture_id'       => $factureOrigine?->id,
                 'objet'            => $request->objet,
                 'motif'            => $motifFinal,
                 'nature_avoir'     => $nature,
@@ -249,23 +262,25 @@ class FactureAvoirController extends Controller
 
             $this->saveElements($facture_avoir, $request, $nature);
 
-            // Mettre à jour le statut de la facture d'origine selon la nature fiscale réelle de l'avoir
-            if ($nature === 'RAN') {
-                $factureOrigine->update(['statut' => 'Annulée par Avoir']);
-            } elseif ($nature === 'RRR') {
-                $factureOrigine->update(['statut' => 'Remise accordée']);
-            } elseif ($nature === 'RAM') {
-                $factureOrigine->update(['statut' => 'Reprise de biens']);
-            } elseif ($nature === 'COR') {
-                $factureOrigine->update(['statut' => 'Rectifiée par avoir']);
-            } elseif ($factureOrigine->fresh()->aAvoirTotal()) {
-                $factureOrigine->update(['statut' => 'Avoir total appliqué']);
-            } else {
-                $factureOrigine->update(['statut' => 'Avoir partiel']);
+            // Mettre à jour le statut de la facture d'origine si applicable
+            if ($factureOrigine) {
+                if ($nature === 'RAN') {
+                    $factureOrigine->update(['statut' => 'Annulée par Avoir']);
+                } elseif ($nature === 'RRR') {
+                    $factureOrigine->update(['statut' => 'Remise accordée']);
+                } elseif ($nature === 'RAM') {
+                    $factureOrigine->update(['statut' => 'Reprise de biens']);
+                } elseif ($nature === 'COR') {
+                    $factureOrigine->update(['statut' => 'Rectifiée par avoir']);
+                } elseif ($factureOrigine->fresh()->aAvoirTotal()) {
+                    $factureOrigine->update(['statut' => 'Avoir total appliqué']);
+                } else {
+                    $factureOrigine->update(['statut' => 'Avoir partiel']);
+                }
             }
 
-            // Gestion de l'impact Trésorerie & Décaissement si le client a un trop-perçu et souhaite un remboursement immédiat
-            if ($request->boolean('effectuer_remboursement')) {
+            // Gestion de l'impact Trésorerie & Décaissement si le client souhaite un remboursement immédiat sur facture
+            if ($request->boolean('effectuer_remboursement') && $factureOrigine) {
                 $montantRemb = (float) $request->input('remboursement_montant');
                 if ($montantRemb > 0) {
                     $modeRemb = $request->input('remboursement_mode', 'Espèces');

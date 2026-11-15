@@ -24,9 +24,9 @@ class StoreFactureRequest extends FormRequest
             'produits_id' => 'required|array|min:1',
             'produits_id.*' => 'required|integer|distinct|exists:produits,id',
             'quantite' => 'required|array',
-            'quantite.*' => 'required|numeric|gt:0',
+            'quantite.*' => ['required', 'numeric', 'gt:0', 'regex:/^\d+(\.\d{1,3})?$/'],
             'prix_unitaire' => 'required|array',
-            'prix_unitaire.*' => 'required|numeric|gt:0',
+            'prix_unitaire.*' => ['required', 'numeric', 'gt:0', 'regex:/^\d+(\.\d{1,2})?$/'],
             'designation' => 'nullable|array',
             'designation.*' => 'nullable|string|max:255',
             'facture_proforma_id' => 'nullable|integer',
@@ -49,7 +49,9 @@ class StoreFactureRequest extends FormRequest
             'produits_id.*.distinct' => 'Un produit apparaît plusieurs fois. Regroupez-le sur une seule ligne.',
             'produits_id.*.exists' => 'Un produit sélectionné n’existe plus.',
             'quantite.*.gt' => 'Chaque quantité doit être strictement supérieure à zéro.',
+            'quantite.*.regex' => 'Chaque quantité peut comporter au maximum 3 décimales après la virgule.',
             'prix_unitaire.*.gt' => 'Chaque prix unitaire doit être strictement supérieur à zéro.',
+            'prix_unitaire.*.regex' => 'Chaque prix unitaire peut comporter au maximum 2 décimales après la virgule.',
             'remise_1.min' => 'La remise 1 ne peut pas être négative.',
             'remise_2.min' => 'La remise 2 ne peut pas être négative.',
         ];
@@ -77,6 +79,20 @@ class StoreFactureRequest extends FormRequest
             'remise_1' => $remiseMontant,
             'remise_2' => (float) $this->input('remise_2', 0),
         ]);
+
+        if (!$this->filled('modepaie_id')) {
+            $rModes = (array) $this->input('reglement_mode', []);
+            $firstMode = $rModes[0] ?? 'ESP';
+            $modeObj = \App\Models\ModePaie::where('code', $firstMode)->orWhere('libelle', $firstMode)->first();
+            if ($modeObj) {
+                $this->merge(['modepaie_id' => $modeObj->id]);
+            } else {
+                $firstDbMode = \App\Models\ModePaie::first();
+                if ($firstDbMode) {
+                    $this->merge(['modepaie_id' => $firstDbMode->id]);
+                }
+            }
+        }
     }
 
     public function withValidator($validator): void
@@ -88,6 +104,25 @@ class StoreFactureRequest extends FormRequest
             if (count($products) !== count($quantities) || count($products) !== count($prices)) {
                 $validator->errors()->add('produits_id', 'Les lignes de facture sont incomplètes. Vérifiez produit, quantité et prix.');
                 return;
+            }
+
+            // Exigence DGI SECeF : SFE ne doit pas enregistrer de facture avec l'article dont le montant est nul ou négatif
+            $totalBrutLignes = 0.0;
+            foreach ($quantities as $idx => $qte) {
+                $pu = (float) ($prices[$idx] ?? 0);
+                $q = (float) $qte;
+                $montantLigne = round($q * $pu, 2);
+                if ($montantLigne <= 0) {
+                    $validator->errors()->add("prix_unitaire.{$idx}", "Le montant de l'article sur la ligne " . ($idx + 1) . " ne peut pas être nul ou négatif.");
+                }
+                $totalBrutLignes += $montantLigne;
+            }
+
+            // Exigence DGI SECeF : SFE ne doit pas enregistrer de facture dont le montant net est nul ou négatif
+            $remise1 = (float) $this->input('remise_1', 0);
+            $remise2 = (float) $this->input('remise_2', 0);
+            if (($totalBrutLignes - $remise1 - $remise2) <= 0) {
+                $validator->errors()->add('produits_id', 'Le montant net total de la facture doit être strictement supérieur à zéro.');
             }
 
             $remiseType = $this->input('remise_type', 'POURCENTAGE');

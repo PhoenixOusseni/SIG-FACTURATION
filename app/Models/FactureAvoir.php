@@ -61,6 +61,12 @@ class FactureAvoir extends Model
      */
     public function getCertificationActiveAttribute(): ?McfCertification
     {
+        if ($this->relationLoaded('McfCertifications')) {
+            return $this->getRelation('McfCertifications')->first(function ($c) {
+                return $c->statut === 'certifiee'
+                    && in_array($c->type_facture, ['FA', 'EA']);
+            });
+        }
         return $this->McfCertifications()
             ->where('statut', 'certifiee')
             ->whereIn('type_facture', ['FA', 'EA'])

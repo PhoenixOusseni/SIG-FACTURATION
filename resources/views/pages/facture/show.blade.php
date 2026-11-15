@@ -202,11 +202,24 @@
 
                     <div class="row mt-3">
                         <div class="col-md-4">
-                            <div class="info-label">Mode de Paiement</div>
+                            <div class="info-label">Mode(s) de Paiement</div>
                             <div class="info-value">
-                                @if ($facture->ModePaie)
-                                    <span class="badge bg-info">{{ $facture->ModePaie->code }}</span>
-                                    <strong>{{ $facture->ModePaie->libelle ?? 'N/A' }}</strong>
+                                @php
+                                    $modesShow = [];
+                                    if ($facture->Reglements && $facture->Reglements->isNotEmpty()) {
+                                        foreach ($facture->Reglements as $r) {
+                                            $modesShow[] = ($r->mode ?: 'Paiement') . ' (' . number_format($r->montant, 0, ',', ' ') . ' F)';
+                                        }
+                                    }
+                                    if ($facture->reste_a_payer > 0.009) {
+                                        $modesShow[] = 'Crédit (' . number_format($facture->reste_a_payer, 0, ',', ' ') . ' F)';
+                                    }
+                                    if (empty($modesShow) && $facture->ModePaie) {
+                                        $modesShow[] = $facture->ModePaie->libelle;
+                                    }
+                                @endphp
+                                @if(!empty($modesShow))
+                                    <strong class="text-primary">{{ implode(', ', $modesShow) }}</strong>
                                 @else
                                     <span class="text-muted">Non défini</span>
                                 @endif
@@ -439,7 +452,7 @@
                             <strong class="d-block mb-1 text-primary"><i class="fas fa-comment-alt me-1"></i> Informations complémentaires FEC DGI (Commande 36h) :</strong>
                             <div class="row">
                                 @foreach($commentaires as $k => $v)
-                                    @if(!empty(trim((string)$v)))
+                                    @if(!is_array($v) && !in_array($k, ['mode_prix', 'modes_paiement_convenus', 'sfe_error', 'action_type', 'cert_status', 'rrr_designation', 'rrr_sous_type', 'factures_concernees']) && !empty(trim((string)$v)))
                                         <div class="col-md-6 small">
                                             <span class="text-muted fw-bold">Ligne {{ $k }} :</span> {{ $v }}
                                         </div>

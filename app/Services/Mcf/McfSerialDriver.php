@@ -46,8 +46,12 @@ class McfSerialDriver
         'ESP' => 'E', // Espèces
         'VIR' => 'V', // Virement bancaire
         'CAR' => 'C', // Carte bancaire
+        'CB'  => 'C', // Carte bancaire
         'MOB' => 'M', // Mobile Money (Orange, Moov, Wave, etc.)
+        'MOM' => 'M', // Mobile Money
         'CHQ' => 'D', // Chèque
+        'CHE' => 'D', // Chèque
+        'CRE' => 'A', // Crédit / À terme
         'AUT' => 'A', // Autre
     ];
 
@@ -604,8 +608,14 @@ class McfSerialDriver
         $typeFacture = strtoupper($params['type_facture'] ?? 'FV');
         if (in_array($typeFacture, ['FA', 'EA'], true)) {
             $parts[] = $typeFacture;
-            $parts[] = self::escape($params['nature_avoir'] ?? 'COR');
-            $parts[] = self::escape($params['reference_originale'] ?? '');
+            $natureAvoir = strtoupper((string) ($params['nature_avoir'] ?? 'COR'));
+            $refOrig = trim((string) ($params['reference_originale'] ?? ''));
+            // Exigence DGI SECeF : les avoirs RRR portent obligatoirement la référence 'RRR'
+            if ($natureAvoir === 'RRR' || str_contains($natureAvoir, 'RRR')) {
+                $refOrig = 'RRR';
+            }
+            $parts[] = self::escape($natureAvoir);
+            $parts[] = self::escape($refOrig);
         } else {
             $parts[] = $typeFacture;
         }
@@ -656,7 +666,13 @@ class McfSerialDriver
         $tauxStr = sprintf("%.2f", $tauxTva);
         $prixStr = sprintf("%.2f", $prixUnitaire);
 
-        $montantLigne = round($prixUnitaire * $quantite, 2);
+        // Règle microprocesseur Eltrade CC300 (SECeF ST 1.0) :
+        // Le firmware MCF vérifie l'égalité : |PR*QTY| + |TS*(1+TR)| = MON
+        // En présence de Taxe Spécifique (TS), le montant MON transmis doit obligatoirement inclure |TS*(1+TR)|
+        $prQtyAbs = round(abs($prixUnitaire * $quantite), 2);
+        $tsTotalHt = round($montantTs * $quantite, 2);
+        $tsMcfCalcule = $montantTs > 0 ? round(abs($tsTotalHt * (1 + ($tauxTva / 100))), 2) : 0.0;
+        $montantLigne = round($prQtyAbs + $tsMcfCalcule, 2);
         $montantStr = sprintf("%.2f", $montantLigne);
 
         $itemInfo = "{$typeArticle},{$groupeTaxe}{$tauxStr}%{$montantStr}{$tab}{$prixStr}";
@@ -665,7 +681,8 @@ class McfSerialDriver
         }
 
         if ($montantTs > 0) {
-            $itemInfo .= sprintf(";T%.2f,%.2f", $montantTs, $montantTs * $quantite);
+            $descTs = !empty($article['description_ts']) ? ',' . self::escape($article['description_ts']) : '';
+            $itemInfo .= sprintf(";T%.2f,%.2f%s", $montantTs, $tsTotalHt, $descTs);
         }
 
         $payload = "{$nomDesc}{$tab}{$itemInfo}";

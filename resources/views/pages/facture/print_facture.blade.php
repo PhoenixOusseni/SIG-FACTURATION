@@ -123,10 +123,10 @@
             color: #0f172a;
         }
 
-        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (40%) */
+        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (37%) */
         .header-col-secef {
-            flex: 0 0 40%;
-            max-width: 40%;
+            flex: 0 0 37%;
+            max-width: 37%;
             min-width: 0;
         }
         .header-secef-badge {
@@ -190,10 +190,10 @@
             line-height: 1.2;
         }
 
-        /* Colonne 3 : Identification Document (30%) */
+        /* Colonne 3 : Identification Document (35%) */
         .header-col-doc {
-            flex: 0 0 30%;
-            max-width: 30%;
+            flex: 0 0 35%;
+            max-width: 35%;
             min-width: 0;
             text-align: right;
             display: flex;
@@ -202,14 +202,16 @@
             justify-content: center;
         }
         .doc-title {
-            font-size: 14.5px;
+            font-size: 13px;
             font-weight: 800;
             color: #1e3a8a;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.2px;
             margin-bottom: 3px;
             line-height: 1.2;
-            white-space: nowrap;
+            word-break: normal;
+            overflow-wrap: break-word;
+            text-align: right;
         }
         .doc-number-badge {
             display: inline-block;
@@ -630,6 +632,8 @@
         $qrData = $certif->qr_content ?? $facture->dgi_qrcode;
         $typeDoc = strtoupper(optional($facture->Typefacture)->code ?? 'FV');
         $isAvoir = in_array($typeDoc, ['FA', 'EA'], true);
+        $isExport = ($typeDoc === 'EV');
+        $isAcompte = in_array($typeDoc, ['FA', 'FT'], true) && !$isAvoir;
         $isVenteExoneree = ($total_taxe == 0);
         $isHtMode = true;
         if (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) {
@@ -666,7 +670,7 @@
                         <div><strong>Machine :</strong> <span class="font-mono">{{ $nimDgi }}</span></div>
                         <div><strong>Compteurs :</strong> <span class="font-mono">{{ $cptDgi }}</span></div>
                         @if($heureDgi)<div><strong>Date :</strong> {{ $heureDgi }}</div>@endif
-                        <div class="secef-code-row"><strong>CODE SECeF DGI :</strong> <span class="sig-full">{{ $sigDgi }}</span></div>
+                        <div class="secef-code-row"><strong>CODE SECeF DGI :</strong> <span class="sig-full">{{ implode('-', str_split(str_replace('-', '', $sigDgi), 4)) }}</span></div>
                     </div>
                 </div>
                 @endif
@@ -676,13 +680,13 @@
             <div class="header-col-doc">
                 <div class="doc-title">
                     @if($facture->statut === 'BROUILLON')
-                        PROJET DE FACTURE
+                        PROJET DE FACTURE (BROUILLON)
                     @elseif($isAvoir)
-                        FACTURE D'AVOIR
-                    @elseif(!empty($isExport))
-                        FACTURE EXPORT
-                    @elseif(!empty($isAcompte))
-                        FACTURE D'ACOMPTE
+                        {{ $typeDoc === 'EA' ? "FACTURE D'AVOIR À L'EXPORTATION" : "FACTURE D'AVOIR" }}
+                    @elseif(!empty($isExport) || $typeDoc === 'EV')
+                        FACTURE DE VENTE À L'EXPORTATION
+                    @elseif(!empty($isAcompte) || in_array($typeDoc, ['FA', 'FT'], true))
+                        FACTURE D'ACOMPTE OU D'AVANCE
                     @else
                         FACTURE DE VENTE
                     @endif
@@ -702,7 +706,39 @@
                     <span>Modalités de règlement</span>
                     <span class="font-mono text-muted">RÉF : {{ $facture->reference ?? $facture->code }}</span>
                 </div>
-                <div class="card-line"><strong>Mode de règlement :</strong> {{ optional($facture->ModePaie)->libelle ?? 'Espèces' }}</div>
+                <div class="card-line">
+                    <strong>Mode(s) de paiement convenu(s) :</strong>
+                    @php
+                        $modesList = [];
+                        $rawNotesPrint = (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) ? (json_decode($facture->notes, true) ?: []) : [];
+                        if (!empty($rawNotesPrint['modes_paiement_convenus']) && is_array($rawNotesPrint['modes_paiement_convenus'])) {
+                            foreach ($rawNotesPrint['modes_paiement_convenus'] as $mc) {
+                                $modesList[] = ($mc['libelle'] ?? $mc['mode']) . ' (' . number_format($mc['montant'], 0, ',', ' ') . ' FCFA)';
+                            }
+                        } elseif ($facture->Reglements && $facture->Reglements->isNotEmpty()) {
+                            foreach ($facture->Reglements as $r) {
+                                $modesList[] = ($r->mode ?: 'Paiement') . ' (' . number_format($r->montant, 0, ',', ' ') . ' FCFA)';
+                            }
+                            if ($facture->reste_a_payer > 0.009) {
+                                $modesList[] = 'Crédit / À terme (' . number_format($facture->reste_a_payer, 0, ',', ' ') . ' FCFA)';
+                            }
+                        } elseif ($facture->reste_a_payer > 0.009) {
+                            $modesList[] = (optional($facture->ModePaie)->libelle ?: 'Espèces') . ' à terme (Crédit : ' . number_format($facture->reste_a_payer, 0, ',', ' ') . ' FCFA)';
+                        } else {
+                            $modesList[] = optional($facture->ModePaie)->libelle ?: 'Espèces';
+                        }
+                    @endphp
+                    <span class="font-mono fw-bold" style="color: #1e3a8a;">{{ implode(', ', $modesList) }}</span>
+                </div>
+                <div class="card-line" style="margin-top: 2px;">
+                    @if($facture->reste_a_payer <= 0.009)
+                        <strong style="color: #15803d;">Règlement :</strong> <span style="color: #15803d; font-weight: 600;">100% Soldé au comptant</span>
+                    @elseif(($facture->montant_paye ?? 0) > 0.009)
+                        <strong style="color: #b45309;">Règlement :</strong> Acompte versé : {{ number_format($facture->montant_paye, 0, ',', ' ') }} FCFA &bull; <strong style="color: #b91c1c;">Reste dû : {{ number_format($facture->reste_a_payer, 0, ',', ' ') }} FCFA</strong>
+                    @else
+                        <strong style="color: #b91c1c;">Règlement :</strong> <span style="color: #b91c1c; font-weight: 600;">0 FCFA réglé &bull; Reste à payer : {{ number_format($facture->reste_a_payer, 0, ',', ' ') }} FCFA (Vente à crédit / à terme)</span>
+                    @endif
+                </div>
                 <div class="card-line"><strong>Opérateur :</strong> {{ optional($facture->User)->prenom }} {{ optional($facture->User)->nom ?? 'Système' }}</div>
                 @if(!empty($facture->objet))
                     <div class="card-line"><strong>Objet :</strong> {{ $facture->objet }}</div>
@@ -768,6 +804,9 @@
                         <td class="text-center font-mono text-muted">{{ $lineIdx++ }}</td>
                         <td>
                             <div class="fw-bold">{{ $labelFiscal }}</div>
+                            @if($tsUnit > 0)
+                                <div style="font-size: 10px; color: #475569; margin-top: 2px;">(dont Taxe Spécifique : {{ number_format($tsUnit, 2, ',', ' ') }} FCFA/u)</div>
+                            @endif
                         </td>
                         <td class="text-center fw-bold">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
                         <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
@@ -854,13 +893,11 @@
                         <td>{{ $isAvoir ? 'NET À DÉDUIRE' : 'NET À PAYER' }}</td>
                         <td class="text-end font-mono">{{ number_format($net_a_payer, 0, ',', ' ') }} FCFA</td>
                     </tr>
-                    @if($total_timbre > 0)
                     <tr>
-                        <td colspan="2" class="text-muted" style="font-size: 7.5px; border-top: 1px dashed #cbd5e1; padding-top: 3px; font-style: italic;">
-                            Timbre quittance (paiement espèces) : {{ number_format($total_timbre, 0, ',', ' ') }} FCFA
+                        <td colspan="2" class="text-muted" style="font-size: 8px; border-top: 1px dashed #cbd5e1; padding-top: 3px; font-style: italic;">
+                            Montant timbre quittance en cas de paiement en espèces : {{ number_format($total_timbre ?? 0, 0, ',', ' ') }} FCFA
                         </td>
                     </tr>
-                    @endif
                 </table>
             </div>
         </div>
@@ -871,7 +908,7 @@
                 if (str_starts_with(trim($facture->notes), '{')) {
                     $rawNotes = json_decode($facture->notes, true) ?: [];
                     foreach ($rawNotes as $k => $v) {
-                        if (in_array($k, ['mode_prix', 'sfe_error', 'action_type', 'cert_status'])) continue;
+                        if (is_array($v) || in_array($k, ['mode_prix', 'modes_paiement_convenus', 'sfe_error', 'action_type', 'cert_status', 'rrr_designation', 'rrr_sous_type', 'factures_concernees'])) continue;
                         if (!empty(trim((string)$v))) {
                             $commentaires[$k] = trim((string)$v);
                         }

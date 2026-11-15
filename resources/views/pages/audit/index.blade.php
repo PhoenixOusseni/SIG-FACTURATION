@@ -183,8 +183,20 @@
                             <td class="small font-monospace">
                                 {{ $log->entite_id ? '#'.$log->entite_id : '—' }}
                             </td>
-                            <td class="small text-secondary" style="max-width: 400px;">
-                                {{ $log->details }}
+                            <td class="small" style="max-width: 450px;">
+                                @if(str_contains($log->details ?? '', 'Code SECeF:'))
+                                    @php
+                                        $parts = explode('Code SECeF:', $log->details);
+                                        $prefix = $parts[0] ?? '';
+                                        $rest = $parts[1] ?? '';
+                                        $codeSecefEnd = strpos($rest, ']');
+                                        $codeSecefVal = ($codeSecefEnd !== false) ? substr($rest, 0, $codeSecefEnd) : '';
+                                        $suffix = ($codeSecefEnd !== false) ? substr($rest, $codeSecefEnd + 1) : $rest;
+                                    @endphp
+                                    {{ $prefix }} <span class="badge bg-primary text-white font-monospace"><i class="fas fa-shield-alt me-1"></i>SECeF: {{ trim($codeSecefVal) }}</span> {{ $suffix }}
+                                @else
+                                    <span class="text-secondary">{{ $log->details }}</span>
+                                @endif
                             </td>
                             <td class="small font-monospace text-muted text-nowrap">
                                 {{ $log->ip_address ?: '127.0.0.1' }}

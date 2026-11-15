@@ -310,6 +310,9 @@ class RapportController extends Controller
                 'user_id'                 => Auth::id(),
             ]);
 
+            // Exigence DGI SECeF : Inscription au journal électronique de tous les rapports générés
+            \App\Models\AuditLog::enregistrer('GENERATE', 'RAPPORT', "Génération du Rapport X N° {$rapport->numero_rapport}");
+
             smilify('success', "Rapport X N° {$rapport->numero_rapport} généré avec succès.");
             return redirect()->route('rapports.index');
         } catch (\Throwable $e) {
@@ -357,6 +360,9 @@ class RapportController extends Controller
                 'raw_mcf_response'        => json_encode($mcfRes),
                 'user_id'                 => Auth::id(),
             ]);
+
+            // Exigence DGI SECeF : Inscription au journal électronique de tous les rapports générés
+            \App\Models\AuditLog::enregistrer('GENERATE', 'RAPPORT', "Génération de la Clôture fiscale Z N° {$rapport->numero_rapport}");
 
             smilify('success', "Clôture fiscale Z N° {$rapport->numero_rapport} exécutée et archivée.");
             return redirect()->route('rapports.imprimer', $rapport->id);

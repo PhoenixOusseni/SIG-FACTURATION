@@ -37,6 +37,32 @@ class StoreFactureAvoirRequest extends StoreFactureRequest
             }
         }
 
+        // Pour les avoirs RRR globaux : rattachement automatique à la prestation de service RRR
+        if ($nature === 'RRR' && empty($cleanProduits)) {
+            $montantRrr = (float) $this->input('montant_rrr_ht', 0);
+            if ($montantRrr > 0) {
+                $tvaId = $this->input('tva_id');
+                $srvProd = \App\Models\Produit::where('code', 'SRV-RRR')->first();
+                if (!$srvProd) {
+                    $tvaB = $tvaId ? \App\Models\Tva::find($tvaId) : \App\Models\Tva::where('code', 'B')->first();
+                    $srvProd = \App\Models\Produit::create([
+                        'code' => 'SRV-RRR',
+                        'designation' => 'Rabais, Remise ou Ristourne accordé (Avoir financier)',
+                        'famille_produit' => 'LOCSER',
+                        'prix_unitaire' => 0,
+                        'qte' => 0,
+                        'tva_id' => $tvaB?->id,
+                        'is_active' => true,
+                    ]);
+                } elseif ($tvaId && (int) $srvProd->tva_id !== (int) $tvaId) {
+                    $srvProd->update(['tva_id' => $tvaId]);
+                }
+                $cleanProduits = [$srvProd->id];
+                $cleanQuantites = [1];
+                $cleanPrix = [$montantRrr];
+            }
+        }
+
         $mergeData = [
             'nature_avoir' => $nature,
             'motif' => $currentMotif ?: ($motifMap[$nature] ?? 'annulation'),
@@ -53,13 +79,16 @@ class StoreFactureAvoirRequest extends StoreFactureRequest
 
     public function rules(): array
     {
+        $isRrr = (strtoupper((string) $this->input('nature_avoir')) === 'RRR');
+
         return [
             'contribuables_id' => 'required|integer|exists:contribuables,id',
             'facture_id' => [
-                'required',
+                $isRrr ? 'nullable' : 'required',
                 'integer',
                 'exists:factures,id',
                 function ($attribute, $value, $fail) {
+                    if (!$value) return;
                     $facture = Facture::find($value);
                     if (!$facture) {
                         return;
@@ -75,6 +104,7 @@ class StoreFactureAvoirRequest extends StoreFactureRequest
                 function ($attribute, $value, $fail) {
                     $nature = strtoupper((string) $value);
                     $factureId = $this->input('facture_id');
+                    if (!$factureId) return;
                     $facture = Facture::find($factureId);
                     if ($facture && $nature === 'RAN' && $facture->aSubiAvoir()) {
                         $fail("La facture {$facture->code} a déjà fait l'objet d'un avoir partiel. L'annulation totale (RAN) est interdite. Veuillez choisir un retour de marchandises (RAM) ou une remise (RRR).");
