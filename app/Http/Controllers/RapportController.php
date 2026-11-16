@@ -360,12 +360,89 @@ class RapportController extends Controller
         ksort($matriceTypeGroupe);
         $parTypeEtGroupeTaxe = array_values($matriceTypeGroupe);
 
-        // Ventes incomplètes (brouillons ou erreurs sur la même période)
-        $ventesIncompletes = Facture::whereBetween('date', [$debut->toDateString(), $fin->toDateString()])
+        // 4. Liste détaillée des Remises, Ristournes et Rabais (RRR / Réductions Commerciales)
+        $listeRrr = [];
+        $totalRrr = 0.0;
+        foreach ($avoirs as $av) {
+            $nature = strtoupper((string) ($av->nature_avoir ?? ''));
+            $motifUpper = strtoupper((string) ($av->motif ?? ''));
+            $isRrr = ($nature === 'RRR')
+                || str_contains($motifUpper, 'RRR')
+                || str_contains($motifUpper, 'RISTOURNE')
+                || str_contains($motifUpper, 'REMISE')
+                || str_contains($motifUpper, 'RABAIS');
+            if ($isRrr) {
+                $mt = (float) $av->montant_total;
+                $totalRrr += $mt;
+                $listeRrr[] = [
+                    'numero'  => $av->code,
+                    'date'    => $av->date ? Carbon::parse($av->date)->format('d/m/Y') : ($av->created_at ? $av->created_at->format('d/m/Y') : '-'),
+                    'client'  => optional($av->Contribuable)->assujeti ?? 'Client',
+                    'motif'   => $av->motif ?: 'Ristourne / Remise',
+                    'montant' => $mt,
+                ];
+            }
+        }
+        foreach ($factures as $f) {
+            $remise = (float) (($f->remise_1 ?? 0) + ($f->remise_2 ?? 0));
+            if ($remise > 0) {
+                $totalRrr += $remise;
+                $listeRrr[] = [
+                    'numero'  => $f->code . ' (Remise)',
+                    'date'    => $f->date ? Carbon::parse($f->date)->format('d/m/Y') : ($f->created_at ? $f->created_at->format('d/m/Y') : '-'),
+                    'client'  => optional($f->Contribuable)->assujeti ?? 'Client',
+                    'motif'   => 'Remise commerciale sur facture',
+                    'montant' => $remise,
+                ];
+            }
+        }
+
+        // 5. Liste détaillée des Autres Enregistrements ayant Réduit les Ventes (COR, RAN, RAM, etc.)
+        $listeAutresAvoirs = [];
+        $totalAutresAvoirs = 0.0;
+        foreach ($avoirs as $av) {
+            $nature = strtoupper((string) ($av->nature_avoir ?? ''));
+            $motifUpper = strtoupper((string) ($av->motif ?? ''));
+            $isRrr = ($nature === 'RRR')
+                || str_contains($motifUpper, 'RRR')
+                || str_contains($motifUpper, 'RISTOURNE')
+                || str_contains($motifUpper, 'REMISE')
+                || str_contains($motifUpper, 'RABAIS');
+            if (!$isRrr) {
+                $natCode = $nature ?: (str_starts_with($av->code, 'EA') ? 'COR' : 'RAN');
+                $mt = (float) $av->montant_total;
+                $totalAutresAvoirs += $mt;
+                $listeAutresAvoirs[] = [
+                    'numero'  => $av->code,
+                    'nature'  => $natCode,
+                    'date'    => $av->date ? Carbon::parse($av->date)->format('d/m/Y') : ($av->created_at ? $av->created_at->format('d/m/Y') : '-'),
+                    'client'  => optional($av->Contribuable)->assujeti ?? 'Client',
+                    'motif'   => $av->motif ?: ($natCode === 'RAM' ? 'Retour marchandise' : 'Annulation vente'),
+                    'montant' => $mt,
+                ];
+            }
+        }
+
+        // 6. Liste détaillée des Ventes Incomplètes (Brouillons ou erreurs sur la même période)
+        $incompletesQuery = Facture::with('Contribuable')
+            ->whereBetween('date', [$debut->toDateString(), $fin->toDateString()])
             ->where(function ($q) {
                 $q->whereNull('dgi_signature')->orWhere('statut', 'BROUILLON');
             })
-            ->count();
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $listeVentesIncompletes = [];
+        foreach ($incompletesQuery as $inc) {
+            $listeVentesIncompletes[] = [
+                'numero'  => $inc->code,
+                'date'    => $inc->date ? Carbon::parse($inc->date)->format('d/m/Y') : ($inc->created_at ? $inc->created_at->format('d/m/Y') : '-'),
+                'client'  => optional($inc->Contribuable)->assujeti ?? 'Client Comptoir',
+                'montant' => (float) ($inc->net_a_payer ?? $inc->montant_total ?? 0),
+                'statut'  => $inc->statut ?: 'BROUILLON',
+            ];
+        }
+        $ventesIncompletes = count($listeVentesIncompletes);
 
         return [
             'periode' => [
@@ -390,6 +467,11 @@ class RapportController extends Controller
                 'modes_paiement'         => $modesPaiement,
                 'par_type_facture'       => $parTypeFacture,
                 'par_type_et_groupe_taxe'=> $parTypeEtGroupeTaxe,
+                'liste_rrr'              => $listeRrr,
+                'total_rrr'              => round($totalRrr, 2),
+                'liste_autres_avoirs'    => $listeAutresAvoirs,
+                'total_autres_avoirs'    => round($totalAutresAvoirs, 2),
+                'liste_ventes_incompletes'=> $listeVentesIncompletes,
             ],
         ];
     }
@@ -538,7 +620,7 @@ class RapportController extends Controller
 
         // Récupération des données statistiques détaillées (ou ré-agrégation si nécessaire)
         $stats = $rapport->details_bruts ?? [];
-        if (empty($stats['par_type_facture']) || empty($stats['par_type_et_groupe_taxe'])) {
+        if (empty($stats['par_type_facture']) || empty($stats['par_type_et_groupe_taxe']) || !isset($stats['liste_rrr'])) {
             $debutStr = $rapport->date_debut ? $rapport->date_debut->toDateString() : ($rapport->date_rapport ? $rapport->date_rapport->toDateString() : now()->toDateString());
             $finStr   = $rapport->date_fin ? $rapport->date_fin->toDateString() : ($rapport->date_rapport ? $rapport->date_rapport->toDateString() : now()->toDateString());
             $donnees  = $this->agregerDonneesPeriode($debutStr, $finStr);

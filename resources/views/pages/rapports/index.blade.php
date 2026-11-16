@@ -260,15 +260,15 @@
                             </li>
                             @endforeach
                             <li class="list-group-item d-flex justify-content-between align-items-center py-2.5 bg-light">
-                                <span class="text-muted"><i data-feather="tag" class="me-2" style="width: 14px; height: 14px;"></i> Réductions commerciales accordées</span>
+                                <span class="text-muted"><i data-feather="tag" class="me-2" style="width: 14px; height: 14px;"></i> Toutes les réductions commerciales</span>
                                 <span class="font-monospace text-danger">- {{ number_format($stats['reductions_commerciales'], 0, ',', ' ') }} F</span>
                             </li>
                             <li class="list-group-item d-flex justify-content-between align-items-center py-2.5 bg-light">
-                                <span class="text-muted"><i data-feather="corner-up-left" class="me-2" style="width: 14px; height: 14px;"></i> Total Factures d'Avoir (A déduire)</span>
+                                <span class="text-muted"><i data-feather="corner-up-left" class="me-2" style="width: 14px; height: 14px;"></i> D'autres enregistrements qui ont réduit les ventes (Avoirs / RRR)</span>
                                 <span class="font-monospace text-danger">- {{ number_format($stats['total_avoirs'], 0, ',', ' ') }} F</span>
                             </li>
                             <li class="list-group-item d-flex justify-content-between align-items-center py-2.5">
-                                <span class="text-muted"><i data-feather="alert-circle" class="me-2" style="width: 14px; height: 14px;"></i> Ventes non fiscalisées / En cours</span>
+                                <span class="text-muted"><i data-feather="alert-circle" class="me-2" style="width: 14px; height: 14px;"></i> Nombre de ventes incomplètes</span>
                                 <span class="badge bg-warning text-dark">{{ $stats['ventes_incompletes'] }} document(s)</span>
                             </li>
                         </ul>
