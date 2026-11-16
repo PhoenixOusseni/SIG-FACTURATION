@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Facture d'Avoir {{ $facture_avoir->code }}</title>
+    <title>Facture d'Avoir {{ $facture_avoir->code }}{{ !empty($isDuplicata) ? ' (DUPLICATA)' : '' }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -25,6 +25,24 @@
             padding: 8mm 10mm 18mm 10mm;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+        }
+
+        /* Filigrane DUPLICATA légal DGI */
+        .watermark-duplicata {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 85px;
+            font-weight: 900;
+            color: rgba(220, 38, 38, 0.08);
+            text-transform: uppercase;
+            letter-spacing: 12px;
+            pointer-events: none;
+            z-index: 0;
+            white-space: nowrap;
+            user-select: none;
+            display: block;
         }
 
         /* Toolbar écran */
@@ -68,10 +86,10 @@
             box-sizing: border-box;
         }
 
-        /* Colonne 1 : Entreprise & Logo (28%) */
+        /* Colonne 1 : Entreprise & Logo (27%) */
         .header-col-company {
-            flex: 0 0 28%;
-            max-width: 28%;
+            flex: 0 0 27%;
+            max-width: 27%;
             min-width: 0;
         }
         .company-logo {
@@ -99,17 +117,17 @@
             color: #0f172a;
         }
 
-        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (42%) */
+        /* Colonne 2 : Cartouche Officiel SECeF DGI (46%) */
         .header-col-secef {
-            flex: 0 0 42%;
-            max-width: 42%;
+            flex: 0 0 46%;
+            max-width: 46%;
             min-width: 0;
         }
         .header-secef-badge {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 5px 8px;
+            gap: 9px;
+            padding: 6px 9px;
             border: 1.5px solid #b91c1c;
             border-radius: 6px;
             background: #fef2f2;
@@ -117,8 +135,8 @@
             box-sizing: border-box;
         }
         .header-secef-badge .seal-qr {
-            width: 52px;
-            height: 52px;
+            width: 66px;
+            height: 66px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
@@ -129,11 +147,15 @@
             padding: 2px;
         }
         .header-secef-info {
-            font-size: 7.8px;
-            line-height: 1.35;
+            font-size: 8.5px;
+            line-height: 1.4;
             color: #7f1d1d;
             flex: 1;
             min-width: 0;
+        }
+        .header-secef-info strong {
+            font-weight: 700;
+            color: #7f1d1d;
         }
         .header-secef-info .badge-ok {
             display: inline-block;
@@ -141,37 +163,42 @@
             color: #fff;
             font-size: 7.5px;
             font-weight: 800;
-            padding: 1px 6px;
+            padding: 1.5px 7px;
             border-radius: 3px;
             margin-bottom: 2px;
             letter-spacing: 0.4px;
             text-transform: uppercase;
         }
+        .header-secef-info .font-mono {
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 8.5px;
+            font-weight: 600;
+        }
         .secef-code-row {
             display: flex;
             align-items: center;
             gap: 3px;
-            margin-top: 1.5px;
+            margin-top: 2px;
             flex-wrap: wrap;
         }
         .header-secef-info .sig-full {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 6.8px;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 7.5px;
             font-weight: 700;
             color: #0f172a;
-            letter-spacing: 0.1px;
+            letter-spacing: 0.2px;
             background: #fff5f5;
-            padding: 1px 3px;
+            padding: 1.5px 4px;
             border: 1px solid #fca5a5;
             border-radius: 3px;
-            line-height: 1.2;
+            line-height: 1.25;
             word-break: break-all;
         }
 
-        /* Colonne 3 : Identification Document (30%) */
+        /* Colonne 3 : Identification Document (27%) */
         .header-col-doc {
-            flex: 0 0 30%;
-            max-width: 30%;
+            flex: 0 0 27%;
+            max-width: 27%;
             min-width: 0;
             text-align: right;
             display: flex;
@@ -573,6 +600,12 @@
         @media print {
             .toolbar { display: none !important; }
             body { padding: 8mm 10mm 18mm 10mm; }
+            .watermark-duplicata {
+                display: block !important;
+                visibility: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
             .invoice-footer-fixed {
                 position: fixed;
                 bottom: 6mm;
@@ -585,6 +618,10 @@
 </head>
 <body>
 
+    @if(!empty($isDuplicata))
+        <div class="watermark-duplicata">DUPLICATA</div>
+    @endif
+
     @if(!request()->has('iframe'))
     <!-- Barre d'outils écran -->
     <div class="toolbar">
@@ -592,7 +629,7 @@
             <a href="{{ route('module_ordre_facture.index') }}" class="btn btn-back">← Retour Factures & Avoirs</a>
         </div>
         <div>
-            <button onclick="window.print()" class="btn btn-primary">🖨 Imprimer Facture d'Avoir</button>
+            <button onclick="imprimerEtMarquer()" class="btn btn-primary">🖨 Imprimer Facture d'Avoir</button>
         </div>
     </div>
     @endif
@@ -606,6 +643,10 @@
         $qrData = $certif?->qr_content;
         $remise_totale = (float)($remise_1 ?? 0) + (float)($remise_2 ?? 0);
         $factureOrigine = $facture_avoir->Facture;
+        $notesData = [];
+        if (!empty($facture_avoir->notes) && str_starts_with(trim($facture_avoir->notes), '{')) {
+            $notesData = json_decode($facture_avoir->notes, true) ?: [];
+        }
     @endphp
 
     <div class="invoice-wrapper">
@@ -631,7 +672,7 @@
                     <div id="header-dgi-qr" class="seal-qr"></div>
                     <div class="header-secef-info">
                         <span class="badge-ok">Certification</span>
-                        <div><strong>Machine :</strong> <span class="font-mono">{{ $nimDgi }}</span></div>
+                        <div><strong>NIM :</strong> <span class="font-mono">{{ $nimDgi }}</span></div>
                         <div><strong>Compteurs :</strong> <span class="font-mono">{{ $cptDgi }}</span></div>
                         @if($heureDgi)<div><strong>Date :</strong> {{ $heureDgi }}</div>@endif
                         <div class="secef-code-row"><strong>CODE SECeF DGI :</strong> <span class="sig-full">{{ $sigDgiFormatted }}</span></div>
@@ -640,13 +681,16 @@
                 @endif
             </div>
 
-            <!-- Colonne 3 : Identification Document (30%) -->
+            <!-- Colonne 3 : Identification Document (28%) -->
             <div class="header-col-doc">
-                <div class="doc-title">
+                <div class="doc-title" style="{{ (str_starts_with($facture_avoir->code, 'EA') || ($factureOrigine && optional($factureOrigine->Typefacture)->code === 'EV')) ? 'font-size: 10px;' : '' }}">
                     @if(($factureOrigine && optional($factureOrigine->Typefacture)->code === 'EV') || str_starts_with($facture_avoir->code, 'EA'))
                         FACTURE D'AVOIR À L'EXPORTATION
                     @else
                         FACTURE D'AVOIR
+                    @endif
+                    @if(!empty($isDuplicata))
+                        <span style="display: block; font-size: 9.5px; color: #dc2626; font-weight: 800; letter-spacing: 1px; margin-top: 2px;">(DUPLICATA)</span>
                     @endif
                 </div>
                 <div class="doc-number-badge">N° {{ $facture_avoir->code }}</div>
@@ -726,6 +770,10 @@
                         $desig = optional($el->Produit)->designation ?? 'Article';
                         $codeProd = optional($el->Produit)->code;
                         $labelFiscal = optional($el->Produit)->label_fiscal ?? $desig;
+                        if ($facture_avoir->nature === 'RRR') {
+                            $labelFiscal = !empty($notesData['rrr_designation']) ? $notesData['rrr_designation'] : ($facture_avoir->motif ?: 'Rabais, Remise ou Ristourne accordé');
+                            $codeProd = null;
+                        }
                     @endphp
                     <tr>
                         <td class="text-center font-mono text-muted">{{ $lineIdx++ }}</td>
@@ -877,8 +925,8 @@
             if (document.getElementById('header-dgi-qr')) {
                 new QRCode(document.getElementById('header-dgi-qr'), {
                     text: qrText,
-                    width: 50,
-                    height: 50,
+                    width: 62,
+                    height: 62,
                     correctLevel: QRCode.CorrectLevel.M
                 });
             }
@@ -890,6 +938,7 @@
             <div class="footer-row">
                 @if(!empty($entete->postale))<span>{{ $entete->postale }}</span> · @endif
                 @if(!empty($entete->rccm))<strong>RCCM :</strong> {{ $entete->rccm }} · @endif
+                @if(!empty($entete->identifiant_sfe ?? $entete->isf))<strong>ISF :</strong> {{ $entete->identifiant_sfe ?? $entete->isf }} · @endif
                 <strong>Régime fiscal :</strong> {{ $entete->regime_fiscal ?? '—' }}
                 @if(!empty($entete->division_fiscal)) · <strong>CDI :</strong> {{ $entete->division_fiscal }} @endif
                 @if(!empty($entete->infos_cadastrales)) · <strong>Cadastre :</strong> {{ $entete->infos_cadastrales }} @endif
@@ -901,5 +950,26 @@
         </footer>
     </div>
 
+    <script>
+        function imprimerEtMarquer() {
+            window.print();
+            fetch('{{ route("module_facture_avoir.marquer_imprimee", $facture_avoir->id) }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json'
+                }
+            });
+        }
+        window.onafterprint = function() {
+            fetch('{{ route("module_facture_avoir.marquer_imprimee", $facture_avoir->id) }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json'
+                }
+            });
+        };
+    </script>
 </body>
 </html>

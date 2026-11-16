@@ -549,6 +549,20 @@ class FactureAvoirController extends Controller
             ->get();
         $entete = Entete::first();
 
+        // Détection du DUPLICATA légal DGI pour Facture d'Avoir
+        $isDuplicata = false;
+        if (!in_array($facture_avoir->statut, ['BROUILLON', 'en attente'], true)) {
+            if ($facture_avoir->print_count > 0 || request('duplicata') == 1) {
+                $isDuplicata = true;
+            }
+            if (!request()->has('iframe')) {
+                $facture_avoir->increment('print_count');
+                if (!$facture_avoir->first_printed_at) {
+                    $facture_avoir->update(['first_printed_at' => now()]);
+                }
+            }
+        }
+
         // Synthèse fiscale stricte identique aux spécifications DGI / SECeF BF ST 1.0
         $isRrr = strtoupper((string) ($facture_avoir->nature_avoir ?? '')) === 'RRR';
         $tauxBic = $isRrr ? 0.0 : (float) optional(optional($facture_avoir->Facture)->Bic)->taux;
@@ -665,11 +679,29 @@ class FactureAvoirController extends Controller
 
         return view('pages.facture_avoir.print', compact(
             'facture_avoir', 'elements', 'entete', 'certif', 'certifOriginal',
-            'natureLabel', 'isExportAvoir', 'rrrSousType',
+            'natureLabel', 'isExportAvoir', 'rrrSousType', 'isDuplicata',
             'total_ht', 'remise_1', 'remise_2', 'net_commercial',
             'tva_groups', 'total_taxe',
             'bic_groups', 'total_bic',
             'total_ttc', 'montant_total'
         ));
+    }
+
+    /**
+     * Marquer un avoir fiscal comme imprimé (gestion du premier tirage original vs duplicata).
+     */
+    public function marquerImprimee($id)
+    {
+        $facture_avoir = FactureAvoir::findOrFail($id);
+        $facture_avoir->increment('print_count');
+        if (!$facture_avoir->first_printed_at) {
+            $facture_avoir->update(['first_printed_at' => now()]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'print_count' => $facture_avoir->print_count,
+            'is_duplicata' => $facture_avoir->print_count > 1,
+        ]);
     }
 }

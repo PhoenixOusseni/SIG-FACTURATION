@@ -78,7 +78,7 @@ class Produit extends Model
     }
 
     /**
-     * Libellé fiscal complet standardisé selon les normes DGI (sans mention de stock).
+     * Libellé fiscal standardisé selon les normes DGI pour impression sur la facture (STRICTEMENT sans stock).
      * Format : [Code] Désignation — [Groupe TVA] — [TYPE_DGI (LOCBIE/LOCSER)]
      */
     public function getLabelFiscalAttribute(): string
@@ -89,6 +89,23 @@ class Produit extends Model
         $type = $this->type_dgi;
 
         return "{$code}{$nom} — [{$groupe}] — [{$type}]";
+    }
+
+    /**
+     * Libellé pour les sélecteurs de saisie/émission (avec stock concaténé dans les infos).
+     * Format : [Code] Désignation — [Groupe TVA] — [TYPE_DGI] · Stock: 15 (ou · Prestation)
+     */
+    public function getLabelSelectionAttribute(): string
+    {
+        $code = $this->code ? "[{$this->code}] " : '';
+        $nom = $this->designation ?: 'Article';
+        $groupe = $this->getGroupeTvaLibelleAttribute();
+        $type = $this->type_dgi;
+        $stockStr = $this->isService()
+            ? 'Prestation'
+            : ('Stock: ' . ((float)$this->qte == (int)$this->qte ? number_format($this->qte, 0, ',', ' ') : number_format($this->qte, 2, ',', ' ')));
+
+        return "{$code}{$nom} — [{$groupe}] — [{$type}] · {$stockStr}";
     }
 
     /**

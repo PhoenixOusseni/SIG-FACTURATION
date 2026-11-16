@@ -963,7 +963,7 @@
                                                                     <option value="">Sélectionner un produit...</option>
                                                                     @foreach ($produits as $prod)
                                                                         <option value="{{ $prod->id }}" {{ $oldProdId == $prod->id ? 'selected' : '' }}>
-                                                                            {{ $prod->label_fiscal }}
+                                                                            {{ $prod->label_selection }}
                                                                         </option>
                                                                     @endforeach
                                                                 </select>
@@ -992,7 +992,7 @@
                                                                 <option value="">Sélectionner un produit...</option>
                                                                 @foreach ($produits as $prod)
                                                                     <option value="{{ $prod->id }}">
-                                                                        {{ $prod->label_fiscal }}
+                                                                        {{ $prod->label_selection }}
                                                                     </option>
                                                                 @endforeach
                                                             </select>
@@ -1135,30 +1135,90 @@
                                 </div>
                             </div>
 
-                            {{-- Bloc 4 : Mentions Spécifiques & Commentaires DGI (Lignes 1 à 9 libres) --}}
+                            {{-- Bloc 4 : Mentions Spécifiques & 8 Lignes de Commentaires DGI (Norme SECeF Codes A à H) --}}
                             <div class="accordion mb-4 shadow-sm" id="accordionComments" style="border-radius: 10px; overflow:hidden;">
                                 <div class="accordion-item border-0">
                                     <h2 class="accordion-header" id="headingComments">
                                         <button class="accordion-button collapsed bg-white fw-bold text-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseComments">
-                                            <i class="fas fa-comment-dots me-2"></i> 4. Mentions Spécifiques & 9 Lignes de Commentaires DGI (Libres &bull; Minimum 64 caractères)
+                                            <i class="fas fa-comment-dots me-2"></i> 4. Lignes de Commentaires Réglementaires DGI (Codes A à H)
                                         </button>
                                     </h2>
                                     <div id="collapseComments" class="accordion-collapse collapse" data-bs-parent="#accordionComments">
                                         <div class="accordion-body bg-light">
                                             <p class="text-muted small mb-3">
-                                                Saisie libre conforme à la norme SECeF DGI BF ST 1.0. Vous pouvez renseigner jusqu'à 9 lignes de mentions libres (Chauffeur, Référence Marché, Bon de Commande, Chantier, Remerciements, etc.). Chaque ligne accepte au moins 100 caractères.
+                                                Tableau de paramétrage officiel des 8 lignes de commentaires DGI (Codes A à H). Les lignes A et B portent des étiquettes réservées pour les exonérations et régimes spécifiques. Les lignes C à H portent une étiquette et un contenu personnalisables.
                                             </p>
-                                            <div class="row g-2">
-                                                @for ($k = 1; $k <= 9; $k++)
-                                                    <div class="col-md-4 col-sm-6">
-                                                        <label class="form-label small text-muted mb-1 fw-semibold">Ligne {{ $k }}</label>
-                                                        <input type="text" maxlength="150" name="comment_{{ $k }}" class="form-control form-control-sm font-monospace"
-                                                            placeholder="Ligne {{ $k }} : Mention libre..." value="{{ old('comment_' . $k) }}">
-                                                    </div>
-                                                @endfor
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-bordered bg-white align-middle mb-2">
+                                                    <thead class="table-light small text-uppercase">
+                                                        <tr>
+                                                            <th style="width: 45px;" class="text-center">#</th>
+                                                            <th style="width: 60px;" class="text-center">Code</th>
+                                                            <th style="width: 170px;">Applicable dans le cas</th>
+                                                            <th style="width: 220px;">Étiquette</th>
+                                                            <th>Contenu / Valeur</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="small">
+                                                        {{-- Ligne 1 : Code A (Exonération) --}}
+                                                        <tr>
+                                                            <td class="text-center fw-bold text-muted">1</td>
+                                                            <td class="text-center"><span class="badge bg-primary">A</span></td>
+                                                            <td><span class="text-muted">Si exonération</span></td>
+                                                            <td>
+                                                                <input type="text" class="form-control form-control-sm bg-light fw-bold" value="Réf. exo." readonly>
+                                                                <input type="hidden" name="comment_label_A" value="Réf. exo.">
+                                                            </td>
+                                                            <td>
+                                                                <input type="text" maxlength="150" name="comment_val_A" class="form-control form-control-sm font-monospace"
+                                                                    placeholder="Référence du certificat d'exonération..." value="{{ old('comment_val_A') }}">
+                                                            </td>
+                                                        </tr>
+                                                        {{-- Ligne 2 : Code B (Base légale / régime) --}}
+                                                        <tr>
+                                                            <td class="text-center fw-bold text-muted">2</td>
+                                                            <td class="text-center"><span class="badge bg-primary">B</span></td>
+                                                            <td><span class="text-muted">Si régime spécifique</span></td>
+                                                            <td>
+                                                                <input type="text" class="form-control form-control-sm bg-light fw-bold" value="Base juridique" readonly>
+                                                                <input type="hidden" name="comment_label_B" value="Base juridique">
+                                                            </td>
+                                                            <td>
+                                                                <input type="text" maxlength="150" name="comment_val_B" class="form-control form-control-sm font-monospace"
+                                                                    placeholder="Article du CGI, Décret ou Texte légal..." value="{{ old('comment_val_B') }}">
+                                                            </td>
+                                                        </tr>
+                                                        {{-- Lignes 3 à 8 : Codes C à H (Réservé / Personnalisable) --}}
+                                                        @php
+                                                            $commentPresets = [
+                                                                'C' => ['num' => 3, 'def' => 'Modalités de livraison'],
+                                                                'D' => ['num' => 4, 'def' => 'Réf. Marché / Commande'],
+                                                                'E' => ['num' => 5, 'def' => 'Coordonnées bancaires'],
+                                                                'F' => ['num' => 6, 'def' => 'Chantier / Projet'],
+                                                                'G' => ['num' => 7, 'def' => 'Contact commercial'],
+                                                                'H' => ['num' => 8, 'def' => 'Observations'],
+                                                            ];
+                                                        @endphp
+                                                        @foreach($commentPresets as $cCode => $cInfo)
+                                                        <tr>
+                                                            <td class="text-center fw-bold text-muted">{{ $cInfo['num'] }}</td>
+                                                            <td class="text-center"><span class="badge bg-secondary">{{ $cCode }}</span></td>
+                                                            <td><span class="badge bg-light text-secondary border">Réservé / Libre</span></td>
+                                                            <td>
+                                                                <input type="text" maxlength="60" name="comment_label_{{ $cCode }}" class="form-control form-control-sm"
+                                                                    placeholder="Étiquette {{ $cCode }}..." value="{{ old('comment_label_' . $cCode, $cInfo['def']) }}">
+                                                            </td>
+                                                            <td>
+                                                                <input type="text" maxlength="150" name="comment_val_{{ $cCode }}" class="form-control form-control-sm font-monospace"
+                                                                    placeholder="Contenu / Mention de la ligne {{ $cCode }}..." value="{{ old('comment_val_' . $cCode) }}">
+                                                            </td>
+                                                        </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                            <div class="mt-3">
-                                                <label class="form-label small text-muted mb-1 fw-semibold">Mention Légale / Conditions Particulières</label>
+                                            <div class="mt-2">
+                                                <label class="form-label small text-muted mb-1 fw-semibold">Mention Légale Complémentaire / Conditions Particulières</label>
                                                 <input type="text" maxlength="255" name="mention_legale" class="form-control form-control-sm"
                                                     placeholder="Ex: Marché N°... / Vente soumise aux conditions générales..." value="{{ old('mention_legale') }}">
                                             </div>
@@ -1246,12 +1306,12 @@
                                         <i class="fas fa-save me-1"></i> Enregistrer en Brouillon
                                     </button>
 
-                                    {{-- 2. Enregistrer & Fiscaliser Directement via MCF (Grisé si MCF non connecté) --}}
+                                    {{-- 2. Enregistrer & Fiscaliser Directement via MCF (Grisé tant que les champs obligatoires ne sont pas remplis) --}}
                                     <button type="submit" name="action_type" value="certifier"
                                         class="btn btn-success fw-bold px-4 shadow-sm" id="btnSubmitCertifier"
-                                        {{ $sfeConnected ? '' : 'disabled' }}
-                                        style="{{ $sfeConnected ? '' : 'opacity: 0.55; cursor: not-allowed;' }}"
-                                        title="{{ $sfeConnected ? 'Signer et sécuriser immédiatement par le boîtier MCF' : 'Boîtier MCF déconnecté : certification directe indisponible' }}">
+                                        disabled
+                                        style="opacity: 0.55; cursor: not-allowed;"
+                                        title="Veuillez renseigner les champs obligatoires (client, type, mode, article valide) pour pouvoir fiscaliser.">
                                         <i class="fas fa-bolt me-1"></i> Enregistrer & Fiscaliser (MCF)
                                     </button>
                                 </div>
@@ -1334,7 +1394,7 @@
                                                 <select name="produits_id[]" class="form-select form-select-sm proforma-product-select" onchange="onProformaProductChange(this)" required>
                                                     <option value="">-- Sélectionner un article ou prestation --</option>
                                                     @foreach ($produits as $prod)
-                                                        <option value="{{ $prod->id }}" data-price="{{ $prod->prix_unitaire }}">{{ $prod->label_fiscal }}</option>
+                                                        <option value="{{ $prod->id }}" data-price="{{ $prod->prix_unitaire }}">{{ $prod->label_selection }}</option>
                                                     @endforeach
                                                 </select>
                                             </td>
@@ -3153,18 +3213,16 @@
                 }
             }
 
-            // 2. Bouton Fiscaliser MCF : actif SEULEMENT si formulaire valide ET boîtier MCF connecté
+            // 2. Bouton Fiscaliser MCF : grisé tant que les champs obligatoires manquent, actif dès que le formulaire est valide
             const $btnCertifier = $('#btnSubmitCertifier');
             if ($btnCertifier.length) {
-                const canCertify = formValid && isMcfConnected;
+                const canCertify = formValid;
                 $btnCertifier.prop('disabled', !canCertify);
                 $btnCertifier.css({
                     'opacity': canCertify ? '1' : '0.55',
                     'cursor': canCertify ? 'pointer' : 'not-allowed'
                 });
-                if (!isMcfConnected) {
-                    $btnCertifier.attr('title', 'Boîtier physique MCF déconnecté ou non détecté. Seul l\'enregistrement en brouillon est disponible.');
-                } else if (!formValid) {
+                if (!formValid) {
                     $btnCertifier.attr('title', 'Veuillez renseigner les champs obligatoires (client, type, mode, article valide) pour pouvoir fiscaliser.');
                 } else {
                     $btnCertifier.attr('title', 'Signer et fiscaliser immédiatement par le boîtier physique MCF');
@@ -3459,7 +3517,7 @@
                             <select name="produits_id[]" class="form-select form-select-sm proforma-product-select" onchange="onProformaProductChange(this)" required>
                                 <option value="">Sélectionner un produit...</option>
                                 @foreach ($produits as $prod)
-                                    <option value="{{ $prod->id }}" data-price="{{ $prod->prix_unitaire }}">{{ $prod->label_fiscal }}</option>
+                                    <option value="{{ $prod->id }}" data-price="{{ $prod->prix_unitaire }}">{{ $prod->label_selection }}</option>
                                 @endforeach
                             </select>
                         </td>

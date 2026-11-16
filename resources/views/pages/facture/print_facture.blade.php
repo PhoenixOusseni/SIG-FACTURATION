@@ -92,10 +92,10 @@
             box-sizing: border-box;
         }
 
-        /* Colonne 1 : Entreprise & Logo (28%) */
+        /* Colonne 1 : Entreprise & Logo (27%) */
         .header-col-company {
-            flex: 0 0 28%;
-            max-width: 28%;
+            flex: 0 0 27%;
+            max-width: 27%;
             min-width: 0;
         }
         .company-logo {
@@ -123,17 +123,17 @@
             color: #0f172a;
         }
 
-        /* Colonne 2 : Cartouche Officiel SECeF DGI Compact (42%) */
+        /* Colonne 2 : Cartouche Officiel SECeF DGI (46%) */
         .header-col-secef {
-            flex: 0 0 42%;
-            max-width: 42%;
+            flex: 0 0 46%;
+            max-width: 46%;
             min-width: 0;
         }
         .header-secef-badge {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 5px 8px;
+            gap: 9px;
+            padding: 6px 9px;
             border: 1.5px solid #1e3a8a;
             border-radius: 6px;
             background: #f8fafc;
@@ -141,8 +141,8 @@
             box-sizing: border-box;
         }
         .header-secef-badge .seal-qr {
-            width: 52px;
-            height: 52px;
+            width: 66px;
+            height: 66px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
@@ -153,11 +153,15 @@
             padding: 2px;
         }
         .header-secef-info {
-            font-size: 7.8px;
-            line-height: 1.35;
-            color: #1e293b;
+            font-size: 8.5px;
+            line-height: 1.4;
+            color: #0f172a;
             flex: 1;
             min-width: 0;
+        }
+        .header-secef-info strong {
+            font-weight: 700;
+            color: #0f172a;
         }
         .header-secef-info .badge-ok {
             display: inline-block;
@@ -165,37 +169,42 @@
             color: #fff;
             font-size: 7.5px;
             font-weight: 800;
-            padding: 1px 6px;
+            padding: 1.5px 7px;
             border-radius: 3px;
             margin-bottom: 2px;
             letter-spacing: 0.4px;
             text-transform: uppercase;
         }
+        .header-secef-info .font-mono {
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 8.5px;
+            font-weight: 600;
+        }
         .secef-code-row {
             display: flex;
             align-items: center;
             gap: 3px;
-            margin-top: 1.5px;
+            margin-top: 2px;
             flex-wrap: wrap;
         }
         .header-secef-info .sig-full {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 6.8px;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 7.5px;
             font-weight: 700;
             color: #0f172a;
-            letter-spacing: 0.1px;
+            letter-spacing: 0.2px;
             background: #eef2ff;
-            padding: 1px 3px;
+            padding: 1.5px 4px;
             border: 1px solid #c7d2fe;
             border-radius: 3px;
-            line-height: 1.2;
+            line-height: 1.25;
             word-break: break-all;
         }
 
-        /* Colonne 3 : Identification Document (30%) */
+        /* Colonne 3 : Identification Document (27%) */
         .header-col-doc {
-            flex: 0 0 30%;
-            max-width: 30%;
+            flex: 0 0 27%;
+            max-width: 27%;
             min-width: 0;
             text-align: right;
             display: flex;
@@ -669,7 +678,7 @@
                     <div id="header-dgi-qr" class="seal-qr"></div>
                     <div class="header-secef-info">
                         <span class="badge-ok">Certification</span>
-                        <div><strong>Machine :</strong> <span class="font-mono">{{ $nimDgi }}</span></div>
+                        <div><strong>NIM :</strong> <span class="font-mono">{{ $nimDgi }}</span></div>
                         <div><strong>Compteurs :</strong> <span class="font-mono">{{ $cptDgi }}</span></div>
                         @if($heureDgi)<div><strong>Date :</strong> {{ $heureDgi }}</div>@endif
                         <div class="secef-code-row"><strong>CODE SECeF DGI :</strong> <span class="sig-full">{{ implode('-', str_split(str_replace('-', '', $sigDgi), 4)) }}</span></div>
@@ -678,9 +687,9 @@
                 @endif
             </div>
 
-            <!-- Colonne 3 : Identification Document (30%) -->
+            <!-- Colonne 3 : Identification Document (28%) -->
             <div class="header-col-doc">
-                <div class="doc-title">
+                <div class="doc-title" style="{{ (!empty($isExport) || $typeDoc === 'EV' || $typeDoc === 'EA') ? 'font-size: 10px;' : '' }}">
                     @if($facture->statut === 'BROUILLON')
                         PROJET DE FACTURE (BROUILLON)
                     @elseif($isAvoir)
@@ -693,7 +702,7 @@
                         FACTURE DE VENTE
                     @endif
                     @if(!empty($isDuplicata))
-                        <span style="display: block; font-size: 10px; color: #dc2626; font-weight: 800; letter-spacing: 1px; margin-top: 2px;">(DUPLICATA)</span>
+                        <span style="display: block; font-size: 9.5px; color: #dc2626; font-weight: 800; letter-spacing: 1px; margin-top: 2px;">(DUPLICATA)</span>
                     @endif
                 </div>
                 <div class="doc-number-badge">N° {{ $facture->code }}</div>
@@ -906,11 +915,15 @@
 
         @php
             $commentaires = [];
+            $lignesCommentaires = [];
             if (!empty($facture->notes)) {
                 if (str_starts_with(trim($facture->notes), '{')) {
                     $rawNotes = json_decode($facture->notes, true) ?: [];
+                    if (!empty($rawNotes['lignes_commentaires']) && is_array($rawNotes['lignes_commentaires'])) {
+                        $lignesCommentaires = $rawNotes['lignes_commentaires'];
+                    }
                     foreach ($rawNotes as $k => $v) {
-                        if (is_array($v) || in_array($k, ['mode_prix', 'modes_paiement_convenus', 'sfe_error', 'action_type', 'cert_status', 'rrr_designation', 'rrr_sous_type', 'factures_concernees'])) continue;
+                        if (is_array($v) || in_array($k, ['mode_prix', 'modes_paiement_convenus', 'sfe_error', 'action_type', 'cert_status', 'rrr_designation', 'rrr_sous_type', 'factures_concernees', 'lignes_commentaires'])) continue;
                         if (!empty(trim((string)$v))) {
                             $commentaires[$k] = trim((string)$v);
                         }
@@ -922,13 +935,18 @@
         @endphp
 
         <!-- 5. Mentions & Observations Particulières -->
-        @if(!empty($commentaires))
+        @if(!empty($commentaires) || !empty($lignesCommentaires))
         <div class="secef-mentions-card">
             <div class="secef-mentions-header">
                 <span class="secef-dot"></span>
-                <span>Observations & Mentions Particulières</span>
+                <span>Observations & Mentions Particulières DGI</span>
             </div>
             <div style="padding: 6px 12px; font-size: 8.5px; line-height: 1.5; color: #1e293b;">
+                @foreach($lignesCommentaires as $code => $lc)
+                    <div>
+                        <strong>{{ $lc['etiquette'] ?? $code }} :</strong> {{ $lc['contenu'] ?? '' }}
+                    </div>
+                @endforeach
                 @foreach($commentaires as $label => $valeur)
                     <div>
                         @if($label === 'mention')
@@ -966,8 +984,8 @@
             if (document.getElementById('header-dgi-qr')) {
                 new QRCode(document.getElementById('header-dgi-qr'), {
                     text: qrText,
-                    width: 50,
-                    height: 50,
+                    width: 62,
+                    height: 62,
                     correctLevel: QRCode.CorrectLevel.M
                 });
             }
@@ -979,6 +997,7 @@
             <div class="footer-row">
                 @if(!empty($entete->postale))<span>{{ $entete->postale }}</span> · @endif
                 @if(!empty($entete->rccm))<strong>RCCM :</strong> {{ $entete->rccm }} · @endif
+                @if(!empty($entete->identifiant_sfe ?? $entete->isf))<strong>ISF :</strong> {{ $entete->identifiant_sfe ?? $entete->isf }} · @endif
                 <strong>Régime fiscal :</strong> {{ $entete->regime_fiscal ?? '—' }}
                 @if(!empty($entete->division_fiscal)) · <strong>CDI :</strong> {{ $entete->division_fiscal }} @endif
                 @if(!empty($entete->infos_cadastrales)) · <strong>Cadastre :</strong> {{ $entete->infos_cadastrales }} @endif

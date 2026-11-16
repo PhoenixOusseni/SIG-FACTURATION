@@ -49,6 +49,7 @@
                     code: p.code || '',
                     designation: p.designation || '',
                     label_fiscal: p.label_fiscal || '',
+                    label_selection: p.label_selection || '',
                     prix_unitaire: parseFloat(p.prix_unitaire) || 0,
                     qte: parseFloat(p.qte) || 0,
                     is_service: !!p.is_service,
@@ -72,14 +73,19 @@
 
         productLabel: function (id, data) {
             data = data || this.options.products[String(id)] || {};
+            if (data.label_selection) {
+                return data.label_selection;
+            }
             if (data.label_fiscal) {
-                return data.label_fiscal;
+                const stockStr = data.is_service ? 'Prestation' : ('Stock: ' + (data.qte || 0));
+                return data.label_fiscal + ' · ' + stockStr;
             }
             const code = data.code ? '[' + data.code + '] ' : '';
             const desig = data.designation || ('#' + id);
             const grp = data.groupe_tva ? 'Groupe ' + data.groupe_tva + ' (' + (data.taux_tva || 0) + '%)' : 'Exonéré (0%)';
             const type = data.type_article || (data.is_service ? 'LOCSER' : 'LOCBIE');
-            return code + desig + ' — [' + grp + '] — [' + type + ']';
+            const stockStr = data.is_service ? 'Prestation' : ('Stock: ' + (data.qte || 0));
+            return code + desig + ' — [' + grp + '] — [' + type + '] · ' + stockStr;
         },
 
         isOutOfStock: function (id) {

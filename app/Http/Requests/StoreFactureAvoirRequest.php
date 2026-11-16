@@ -37,29 +37,23 @@ class StoreFactureAvoirRequest extends StoreFactureRequest
             }
         }
 
-        // Pour les avoirs RRR globaux : rattachement automatique à la prestation de service RRR
+        // Pour les avoirs RRR globaux : proposition et rattachement à un article de service existant (sans jamais créer de faux article en base)
         if ($nature === 'RRR' && empty($cleanProduits)) {
             $montantRrr = (float) $this->input('montant_rrr_ht', 0);
             if ($montantRrr > 0) {
                 $tvaId = $this->input('tva_id');
-                $srvProd = \App\Models\Produit::where('code', 'SRV-RRR')->first();
-                if (!$srvProd) {
-                    $tvaB = $tvaId ? \App\Models\Tva::find($tvaId) : \App\Models\Tva::where('code', 'B')->first();
-                    $srvProd = \App\Models\Produit::create([
-                        'code' => 'SRV-RRR',
-                        'designation' => 'Rabais, Remise ou Ristourne accordé (Avoir financier)',
-                        'famille_produit' => 'LOCSER',
-                        'prix_unitaire' => 0,
-                        'qte' => 0,
-                        'tva_id' => $tvaB?->id,
-                        'is_active' => true,
-                    ]);
-                } elseif ($tvaId && (int) $srvProd->tva_id !== (int) $tvaId) {
-                    $srvProd->update(['tva_id' => $tvaId]);
+                $srvProd = \App\Models\Produit::where('code', 'SRV-RRR')->first()
+                    ?? \App\Models\Produit::where('famille_produit', 'LOCSER')->first()
+                    ?? \App\Models\Produit::first();
+
+                if ($srvProd) {
+                    if ($tvaId && (int) $srvProd->tva_id !== (int) $tvaId) {
+                        $srvProd->update(['tva_id' => $tvaId]);
+                    }
+                    $cleanProduits = [$srvProd->id];
+                    $cleanQuantites = [1];
+                    $cleanPrix = [$montantRrr];
                 }
-                $cleanProduits = [$srvProd->id];
-                $cleanQuantites = [1];
-                $cleanPrix = [$montantRrr];
             }
         }
 

@@ -91,46 +91,99 @@
         </div>
     </div>
 
-    <!-- Ventilation TVA -->
-    <div class="section-title">1. Récapitulatif Fiscal par Groupes de Taxes (DGI)</div>
+    <!-- 1. Récapitulatif par Type de Facture -->
+    @php
+        $parType = $stats['par_type_facture'] ?? [];
+        $totalNb = 0; $totalHt = 0; $totalTva = 0; $totalTtc = 0;
+    @endphp
+    <div class="section-title">1. Récapitulatif par Type de Facture (Norme DGI SECeF)</div>
     <table>
         <thead>
             <tr>
-                <th>Groupe SECeF</th>
-                <th class="text-center">Taux</th>
-                <th class="text-end">Base HT Taxable</th>
-                <th class="text-end">Montant TVA</th>
-                <th class="text-end">Taxe Spécifique (TS)</th>
-                <th class="text-end">Total TTC Lignes</th>
+                <th>Type de Facture</th>
+                <th class="text-center">Nombre</th>
+                <th class="text-end">Total HT</th>
+                <th class="text-end">Total TVA</th>
+                <th class="text-end">Total TTC</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($stats['groupes_taxes'] as $codeG => $g)
-            <tr>
-                <td><strong>Groupe {{ $codeG }}</strong> - {{ $g['libelle'] }}</td>
-                <td class="text-center">{{ $g['taux'] > 0 ? $g['taux'].'%' : '0%' }}</td>
-                <td class="text-end font-monospace">{{ number_format($g['base_ht'], 0, ',', ' ') }} F</td>
-                <td class="text-end font-monospace fw-bold">{{ number_format($g['tva'], 0, ',', ' ') }} F</td>
-                <td class="text-end font-monospace">{{ number_format($g['ts'], 0, ',', ' ') }} F</td>
-                <td class="text-end font-monospace fw-bold">{{ number_format($g['base_ht'] + $g['tva'] + $g['ts'], 0, ',', ' ') }} F</td>
-            </tr>
+            @foreach(['EA', 'EV', 'FA', 'FT', 'FV'] as $tCode)
+                @php
+                    $tRow = $parType[$tCode] ?? ['count' => 0, 'total_ht' => 0, 'total_tva' => 0, 'total_ttc' => 0];
+                    $totalNb += (int)($tRow['count'] ?? 0);
+                    $totalHt += (float)($tRow['total_ht'] ?? 0);
+                    $totalTva += (float)($tRow['total_tva'] ?? 0);
+                    $totalTtc += (float)($tRow['total_ttc'] ?? 0);
+                @endphp
+                <tr>
+                    <td><strong>{{ $tCode }}</strong></td>
+                    <td class="text-center">{{ $tRow['count'] ?? 0 }}</td>
+                    <td class="text-end font-monospace">{{ number_format($tRow['total_ht'] ?? 0, 0, ',', ' ') }} F</td>
+                    <td class="text-end font-monospace">{{ number_format($tRow['total_tva'] ?? 0, 0, ',', ' ') }} F</td>
+                    <td class="text-end font-monospace fw-bold">{{ number_format($tRow['total_ttc'] ?? 0, 0, ',', ' ') }} F</td>
+                </tr>
             @endforeach
         </tbody>
         <tfoot style="background: #f8fafc; font-weight: bold;">
             <tr>
-                <td colspan="2">TOTAL GÉNÉRAL</td>
-                <td class="text-end font-monospace">{{ number_format($stats['chiffre_affaires_ht'], 0, ',', ' ') }} F</td>
-                <td class="text-end font-monospace">{{ number_format($stats['tva_collectee'], 0, ',', ' ') }} F</td>
-                <td class="text-end font-monospace">{{ number_format($stats['taxes_specifiques'], 0, ',', ' ') }} F</td>
-                <td class="text-end font-monospace">{{ number_format($stats['total_ttc'], 0, ',', ' ') }} F</td>
+                <td>TOTAL</td>
+                <td class="text-center">{{ $totalNb }}</td>
+                <td class="text-end font-monospace">{{ number_format($totalHt, 0, ',', ' ') }} F</td>
+                <td class="text-end font-monospace">{{ number_format($totalTva, 0, ',', ' ') }} F</td>
+                <td class="text-end font-monospace">{{ number_format($totalTtc, 0, ',', ' ') }} F</td>
             </tr>
         </tfoot>
+    </table>
+
+    <!-- 2. Montants par groupe de taxation et type de facture -->
+    @php
+        $parTypeGroupe = $stats['par_type_et_groupe_taxe'] ?? [];
+    @endphp
+    <div class="section-title">2. Montants par Groupe de Taxation et Type de Facture (Norme DGI SECeF)</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 8%;">Type</th>
+                <th style="width: 8%;" class="text-center">Grp</th>
+                <th>Description</th>
+                <th style="width: 10%;" class="text-center">Taux</th>
+                <th style="width: 15%;" class="text-end">HT (FCFA)</th>
+                <th style="width: 15%;" class="text-end">TVA (FCFA)</th>
+                <th style="width: 16%;" class="text-end">TTC (FCFA)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($parTypeGroupe as $row)
+            <tr>
+                <td><strong>{{ $row['type'] }}</strong></td>
+                <td class="text-center fw-bold">{{ $row['groupe'] }}</td>
+                <td>{{ $row['description'] }}</td>
+                <td class="text-center">{{ isset($row['taux']) && $row['taux'] > 0 ? $row['taux'].'%' : '0%' }}</td>
+                <td class="text-end font-monospace">{{ number_format($row['ht'] ?? 0, 0, ',', ' ') }} F</td>
+                <td class="text-end font-monospace">{{ number_format($row['tva'] ?? 0, 0, ',', ' ') }} F</td>
+                <td class="text-end font-monospace fw-bold">{{ number_format($row['ttc'] ?? 0, 0, ',', ' ') }} F</td>
+            </tr>
+            @empty
+                @foreach($stats['groupes_taxes'] as $codeG => $g)
+                <tr>
+                    <td><strong>FV</strong></td>
+                    <td class="text-center fw-bold">{{ $codeG }}</td>
+                    <td>{{ $g['libelle'] }}</td>
+                    <td class="text-center">{{ $g['taux'] > 0 ? $g['taux'].'%' : '0%' }}</td>
+                    <td class="text-end font-monospace">{{ number_format($g['base_ht'], 0, ',', ' ') }} F</td>
+                    <td class="text-end font-monospace">{{ number_format($g['tva'], 0, ',', ' ') }} F</td>
+                    <td class="text-end font-monospace fw-bold">{{ number_format($g['base_ht'] + $g['tva'] + $g['ts'], 0, ',', ' ') }} F</td>
+                </tr>
+                @endforeach
+            @endforelse
+        </tbody>
     </table>
 
     <!-- Modes de règlement & Statistiques -->
     <div style="display: flex; gap: 12px; margin-bottom: 12px;">
         <div style="flex: 1;">
-            <div class="section-title">2. Modes de Règlement</div>
+            <div class="section-title">3. Modes de Règlement</div>
             <table>
                 <thead>
                     <tr><th>Mode</th><th class="text-end">Montant Encaissé</th></tr>
@@ -143,7 +196,7 @@
             </table>
         </div>
         <div style="flex: 1;">
-            <div class="section-title">3. Activité Opérationnelle</div>
+            <div class="section-title">4. Activité Opérationnelle</div>
             <table>
                 <tbody>
                     <tr><td>Factures de vente émises (FV) :</td><td class="text-end fw-bold">{{ $stats['nb_ventes'] }}</td></tr>
@@ -156,7 +209,7 @@
     </div>
 
     <!-- Liste des factures de la période -->
-    <div class="section-title">4. Registre des Factures Émises sur la Période (Extrait)</div>
+    <div class="section-title">5. Registre des Factures & Avoirs Émis sur la Période (Extrait)</div>
     <table>
         <thead>
             <tr>

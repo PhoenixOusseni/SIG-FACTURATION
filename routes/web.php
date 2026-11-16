@@ -132,6 +132,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('print_facture_avoir/{id}', [FactureAvoirController::class, 'print'])->name('print_facture_avoir');
     Route::get('module_facture_avoir/{id}/print', [FactureAvoirController::class, 'print'])->name('module_facture_avoir.print');
     Route::post('module_facture_avoir/{id}/certifier', [FactureAvoirController::class, 'certifier'])->name('module_facture_avoir.certifier');
+    Route::post('module_facture_avoir/{id}/marquer-imprimee', [FactureAvoirController::class, 'marquerImprimee'])->name('module_facture_avoir.marquer_imprimee');
 
     // ===== Bordereau de Livraison =====
     Route::resource('module_bordereau_livraison', BordereauLivraisonController::class)->except(['create', 'edit']);

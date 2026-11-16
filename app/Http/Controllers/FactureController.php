@@ -108,6 +108,7 @@ class FactureController extends Controller
                 'code' => $produit->code,
                 'designation' => $produit->designation,
                 'label_fiscal' => $produit->label_fiscal,
+                'label_selection' => $produit->label_selection,
                 'prix_unitaire' => $produit->prix_unitaire,
                 'prix_unitaire_ttc' => $produit->prix_unitaire_ttc,
                 'qte' => $produit->qte,
@@ -134,7 +135,11 @@ class FactureController extends Controller
         $snapshotService = app(\App\Services\SFE\StatusSnapshotService::class);
         $snapshotData = $snapshotService->current();
         $isSimulation = (strtoupper($entete->port_com ?? '') === 'SIMULATION');
-        $sfeConnected = $isSimulation || (($snapshotData['level'] ?? '') === 'connected' && !empty($snapshotData['device']['succes']));
+        $sfeConnected = $isSimulation
+            || !empty($snapshotData['device']['succes'])
+            || !empty($snapshotData['device_ready'])
+            || in_array($snapshotData['level'] ?? '', ['connected', 'warning'], true)
+            || !empty($entete->port_com);
 
         return view('pages.facture.index', compact(
             'collection',
@@ -219,11 +224,28 @@ class FactureController extends Controller
             }
             $generatedCode = 'FACT-' . str_pad($nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
 
-            // Compilation des 9 lignes libres de commentaires DGI (SECeF ST 1.0)
+            // Compilation des 8 lignes de commentaires DGI (SECeF ST 1.0 Codes A à H)
             $notesData = [];
+            $lignesCommentaires = [];
+            foreach (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as $code) {
+                $label = $code === 'A' ? 'Réf. exo.' : ($code === 'B' ? 'Base juridique' : trim($request->input("comment_label_{$code}", '')));
+                $val = trim($request->input("comment_val_{$code}", $request->input("comment_" . strtolower($code), '')));
+                if (!empty($val)) {
+                    $lignesCommentaires[$code] = [
+                        'code' => $code,
+                        'etiquette' => $label ?: "Ligne {$code}",
+                        'contenu' => $val,
+                    ];
+                }
+            }
+            if (!empty($lignesCommentaires)) {
+                $notesData['lignes_commentaires'] = $lignesCommentaires;
+            }
+
+            // Compatibilité ascendante avec les anciens champs comment_1..comment_9
             for ($k = 1; $k <= 9; $k++) {
-                $letter = chr(96 + $k); // a, b, c, ...
-                $val = $request->input("comment_{$k}") ?? $request->input("comment_{$letter}");
+                $letter = chr(96 + $k);
+                $val = $request->input("comment_{$k}");
                 if (!empty($val)) {
                     $notesData["Ligne {$k}"] = trim($val);
                 }

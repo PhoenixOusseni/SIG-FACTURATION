@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Entete;
 use App\Models\Facture;
+use App\Models\FactureAvoir;
 use App\Models\McfRapport;
 use App\Services\Mcf\McfSerialDriver;
 use Carbon\Carbon;
@@ -53,6 +54,21 @@ class RapportController extends Controller
             'ElementFactures.Produit.bic',
         ])
         ->whereBetween('date', [$debut->toDateString(), $fin->toDateString()])
+        ->where('statut', '!=', 'ANNULEE')
+        ->orderBy('date', 'desc')
+        ->orderBy('id', 'desc')
+        ->get();
+
+        $avoirs = FactureAvoir::with([
+            'Contribuable.Categorie',
+            'Facture.Typefacture',
+            'ModePaie',
+            'McfCertifications',
+            'ElementFactureAvoirs.Produit.tva',
+            'ElementFactureAvoirs.Produit.bic',
+        ])
+        ->whereBetween('date', [$debut->toDateString(), $fin->toDateString()])
+        ->where('statut', '!=', 'ANNULEE')
         ->orderBy('date', 'desc')
         ->orderBy('id', 'desc')
         ->get();
@@ -77,17 +93,42 @@ class RapportController extends Controller
         ];
 
         $modesPaiement = [
-            'Espèces'      => 0.0,
-            'Virement'     => 0.0,
-            'Chèque'       => 0.0,
-            'Mobile Money' => 0.0,
-            'Autre'        => 0.0,
+            'Espèces'          => 0.0,
+            'Virement'         => 0.0,
+            'Chèque'           => 0.0,
+            'Mobile Money'     => 0.0,
+            'Carte bancaire'   => 0.0,
+            'Crédit / À terme' => 0.0,
         ];
 
+        // 1. Récapitulatif par type de facture (Tableau 1 DGI FEC)
+        $standardTypes = ['EA', 'EV', 'FA', 'FT', 'FV'];
         $parTypeFacture = [];
+        foreach ($standardTypes as $st) {
+            $parTypeFacture[$st] = [
+                'type'      => $st,
+                'count'     => 0,
+                'total_ht'  => 0.0,
+                'total_tva' => 0.0,
+                'total_ttc' => 0.0,
+            ];
+        }
+
+        // 2. Matrice Type x Groupe de Taxe (Tableau 2 DGI FEC)
+        $matriceTypeGroupe = [];
 
         foreach ($factures as $f) {
-            $typeCode = strtoupper(optional($f->Typefacture)->code ?? 'FV');
+            $rawTypeCode = strtoupper(optional($f->Typefacture)->code ?? 'FV');
+            if (in_array($rawTypeCode, ['EV', 'ET'], true)) {
+                $typeCode = 'EV';
+            } elseif ($rawTypeCode === 'FT') {
+                $typeCode = 'FT';
+            } elseif (in_array($rawTypeCode, ['FA', 'EA'], true)) {
+                $typeCode = $rawTypeCode;
+            } else {
+                $typeCode = 'FV';
+            }
+
             $isAvoir  = in_array($typeCode, ['FA', 'EA'], true);
             $signe    = $isAvoir ? -1.0 : 1.0;
 
@@ -96,7 +137,7 @@ class RapportController extends Controller
 
             if (!isset($parTypeFacture[$typeCode])) {
                 $parTypeFacture[$typeCode] = [
-                    'libelle'   => $isAvoir ? "Avoirs ($typeCode)" : "Ventes ($typeCode)",
+                    'type'      => $typeCode,
                     'count'     => 0,
                     'total_ht'  => 0.0,
                     'total_tva' => 0.0,
@@ -119,14 +160,18 @@ class RapportController extends Controller
                 $tsUnit   = (float) (optional($el->Produit)->montant_ts ?? 0.0);
                 $ligneTs  = $tsUnit * $qte;
 
-                $tauxTva = (float) (optional(optional($el->Produit)->tva)->taux ?? 0.0);
-                $baseTva = $ligneHt + $ligneTs;
-                $ligneTva = $tauxTva > 0 ? round($baseTva * ($tauxTva / 100.0), 2) : 0.0;
+                $tvaObj   = optional($el->Produit)->tva;
+                $tauxTva  = (float) ($tvaObj?->taux ?? 0.0);
+                $grpKey   = strtoupper((string) ($tvaObj?->code ?: ($tauxTva > 0 ? 'B' : 'A')));
+                $descTva  = $grpKey . ' — ' . ($tvaObj?->libelle ?: ($tauxTva > 0 ? "TVA {$tauxTva}%" : 'Exonéré'));
 
-                $grpKey = $tauxTva > 0 ? 'B' : 'A';
+                $baseTva  = $ligneHt + $ligneTs;
+                $ligneTva = $tauxTva > 0 ? round($baseTva * ($tauxTva / 100.0), 2) : 0.0;
+                $ligneTtc = $baseTva + $ligneTva;
+
                 if (!isset($groupesTaxes[$grpKey])) {
                     $groupesTaxes[$grpKey] = [
-                        'libelle' => "Groupe {$grpKey} ({$tauxTva}%)",
+                        'libelle' => $descTva,
                         'taux'    => $tauxTva,
                         'base_ht' => 0.0,
                         'tva'     => 0.0,
@@ -137,6 +182,22 @@ class RapportController extends Controller
                 $groupesTaxes[$grpKey]['base_ht'] += ($ligneHt * $signe);
                 $groupesTaxes[$grpKey]['tva']     += ($ligneTva * $signe);
                 $groupesTaxes[$grpKey]['ts']      += ($ligneTs * $signe);
+
+                $matKey = "{$typeCode}|{$grpKey}";
+                if (!isset($matriceTypeGroupe[$matKey])) {
+                    $matriceTypeGroupe[$matKey] = [
+                        'type'        => $typeCode,
+                        'groupe'      => $grpKey,
+                        'description' => $descTva,
+                        'taux'        => $tauxTva,
+                        'ht'          => 0.0,
+                        'tva'         => 0.0,
+                        'ttc'         => 0.0,
+                    ];
+                }
+                $matriceTypeGroupe[$matKey]['ht']  += $ligneHt;
+                $matriceTypeGroupe[$matKey]['tva'] += $ligneTva;
+                $matriceTypeGroupe[$matKey]['ttc'] += $ligneTtc;
 
                 $factureHt  += $ligneHt;
                 $factureTva += $ligneTva;
@@ -165,6 +226,10 @@ class RapportController extends Controller
                     $modeLibelle = 'Chèque'; $modeCode = 'C';
                 } elseif (str_contains($code, 'MOB') || str_contains($code, 'M') || str_contains($code, 'OM') || str_contains($code, 'MOOV')) {
                     $modeLibelle = 'Mobile Money'; $modeCode = 'M';
+                } elseif (str_contains($code, 'CARTE') || str_contains($code, 'CB')) {
+                    $modeLibelle = 'Carte bancaire'; $modeCode = 'B';
+                } elseif (str_contains($code, 'CRE') || str_contains($code, 'A')) {
+                    $modeLibelle = 'Crédit / À terme'; $modeCode = 'A';
                 } else {
                     $modeLibelle = $lib ?: 'Autre';
                 }
@@ -173,13 +238,29 @@ class RapportController extends Controller
             // Calcul du timbre de quittance en cas de paiement espèces
             $factureTimbre = ($modeCode === 'E') ? self::calculerTimbreFiscal($factureTtc) : 0.0;
 
-            // Enregistrement des règlements réels s'il y en a
-            if ($f->Reglements->count() > 0) {
+            // Enregistrement des règlements réels ou convenus
+            $rawNotes = (!empty($f->notes) && str_starts_with(trim($f->notes), '{')) ? (json_decode($f->notes, true) ?: []) : [];
+            if (!empty($rawNotes['modes_paiement_convenus']) && is_array($rawNotes['modes_paiement_convenus'])) {
+                foreach ($rawNotes['modes_paiement_convenus'] as $mc) {
+                    $mNom = $mc['libelle'] ?? $mc['mode'];
+                    if (str_contains(strtoupper($mNom), 'ESP')) $nomMode = 'Espèces';
+                    elseif (str_contains(strtoupper($mNom), 'VIR')) $nomMode = 'Virement';
+                    elseif (str_contains(strtoupper($mNom), 'CHQ')) $nomMode = 'Chèque';
+                    elseif (str_contains(strtoupper($mNom), 'MOB') || str_contains(strtoupper($mNom), 'MOOV') || str_contains(strtoupper($mNom), 'ORANGE')) $nomMode = 'Mobile Money';
+                    elseif (str_contains(strtoupper($mNom), 'CARD') || str_contains(strtoupper($mNom), 'CB')) $nomMode = 'Carte bancaire';
+                    elseif (str_contains(strtoupper($mNom), 'CRE')) $nomMode = 'Crédit / À terme';
+                    else $nomMode = $mNom;
+
+                    $modesPaiement[$nomMode] = ($modesPaiement[$nomMode] ?? 0.0) + ((float) ($mc['montant'] ?? 0) * $signe);
+                }
+            } elseif ($f->Reglements->count() > 0) {
                 foreach ($f->Reglements as $reg) {
                     $regMode = strtoupper((string) ($reg->mode ?? 'ESPECES'));
                     if (str_contains($regMode, 'VIR') || str_contains($regMode, 'V')) $nomMode = 'Virement';
                     elseif (str_contains($regMode, 'CHQ') || str_contains($regMode, 'C')) $nomMode = 'Chèque';
-                    elseif (str_contains($regMode, 'MOB') || str_contains($regMode, 'M')) $nomMode = 'Mobile Money';
+                    elseif (str_contains($regMode, 'MOB') || str_contains($regMode, 'M') || str_contains($regMode, 'ORANGE') || str_contains($regMode, 'MOOV')) $nomMode = 'Mobile Money';
+                    elseif (str_contains($regMode, 'CARD') || str_contains($regMode, 'CB')) $nomMode = 'Carte bancaire';
+                    elseif (str_contains($regMode, 'CRE')) $nomMode = 'Crédit / À terme';
                     else $nomMode = 'Espèces';
 
                     $modesPaiement[$nomMode] = ($modesPaiement[$nomMode] ?? 0.0) + ((float) $reg->montant * $signe);
@@ -207,6 +288,78 @@ class RapportController extends Controller
             $parTypeFacture[$typeCode]['total_ttc'] += $factureTtc;
         }
 
+        // Intégration complète des Factures d'Avoir distinctes (Table facture_avoirs)
+        foreach ($avoirs as $av) {
+            $isExportAvoir = ($av->Facture && optional($av->Facture->Typefacture)->code === 'EV') || str_starts_with($av->code, 'EA') || optional($av->certification_active)->type_facture === 'EA';
+            $avTypeCode = $isExportAvoir ? 'EA' : 'FA';
+
+            $nbAvoirs++;
+            if (!isset($parTypeFacture[$avTypeCode])) {
+                $parTypeFacture[$avTypeCode] = [
+                    'type'      => $avTypeCode,
+                    'count'     => 0,
+                    'total_ht'  => 0.0,
+                    'total_tva' => 0.0,
+                    'total_ttc' => 0.0,
+                ];
+            }
+            $parTypeFacture[$avTypeCode]['count']++;
+
+            $avHt  = 0.0;
+            $avTva = 0.0;
+            $avTs  = 0.0;
+
+            foreach ($av->ElementFactureAvoirs as $el) {
+                $qte      = (float) $el->quantite;
+                $pu       = (float) $el->prix_unitaire;
+                $ligneHt  = $qte * $pu;
+                $tsUnit   = (float) (optional($el->Produit)->montant_ts ?? 0.0);
+                $ligneTs  = $tsUnit * $qte;
+
+                $tvaObj   = optional($el->Produit)->tva;
+                $tauxTva  = (float) ($tvaObj?->taux ?? 0.0);
+                $grpKey   = strtoupper((string) ($tvaObj?->code ?: ($tauxTva > 0 ? 'B' : 'A')));
+                $descTva  = $grpKey . ' — ' . ($tvaObj?->libelle ?: ($tauxTva > 0 ? "TVA {$tauxTva}%" : 'Exonéré'));
+
+                $baseTva  = $ligneHt + $ligneTs;
+                $ligneTva = $tauxTva > 0 ? round($baseTva * ($tauxTva / 100.0), 2) : 0.0;
+                $ligneTtc = $baseTva + $ligneTva;
+
+                $matKey = "{$avTypeCode}|{$grpKey}";
+                if (!isset($matriceTypeGroupe[$matKey])) {
+                    $matriceTypeGroupe[$matKey] = [
+                        'type'        => $avTypeCode,
+                        'groupe'      => $grpKey,
+                        'description' => $descTva,
+                        'taux'        => $tauxTva,
+                        'ht'          => 0.0,
+                        'tva'         => 0.0,
+                        'ttc'         => 0.0,
+                    ];
+                }
+                $matriceTypeGroupe[$matKey]['ht']  += $ligneHt;
+                $matriceTypeGroupe[$matKey]['tva'] += $ligneTva;
+                $matriceTypeGroupe[$matKey]['ttc'] += $ligneTtc;
+
+                $avHt  += $ligneHt;
+                $avTva += $ligneTva;
+                $avTs  += $ligneTs;
+            }
+
+            $remiseAv = (float) (($av->remise_1 ?? 0) + ($av->remise_2 ?? 0));
+            $netCommercialAv = max(0, $avHt - $remiseAv);
+            $avTtc = $netCommercialAv + $avTva + $avTs;
+
+            $totalAvoirs += $avTtc;
+            $parTypeFacture[$avTypeCode]['total_ht']  += $netCommercialAv;
+            $parTypeFacture[$avTypeCode]['total_tva'] += $avTva;
+            $parTypeFacture[$avTypeCode]['total_ttc'] += $avTtc;
+        }
+
+        // Tri et formalisation du Tableau 2 DGI (Type x Groupe de Taxe)
+        ksort($matriceTypeGroupe);
+        $parTypeEtGroupeTaxe = array_values($matriceTypeGroupe);
+
         // Ventes incomplètes (brouillons ou erreurs sur la même période)
         $ventesIncompletes = Facture::whereBetween('date', [$debut->toDateString(), $fin->toDateString()])
             ->where(function ($q) {
@@ -220,6 +373,7 @@ class RapportController extends Controller
                 'fin'   => $fin->toDateString(),
             ],
             'factures'     => $factures,
+            'avoirs'       => $avoirs,
             'statistiques' => [
                 'chiffre_affaires_ht'    => round($totalHtGlobal, 2),
                 'tva_collectee'          => round($totalTvaGlobal, 2),
@@ -235,6 +389,7 @@ class RapportController extends Controller
                 'groupes_taxes'          => $groupesTaxes,
                 'modes_paiement'         => $modesPaiement,
                 'par_type_facture'       => $parTypeFacture,
+                'par_type_et_groupe_taxe'=> $parTypeEtGroupeTaxe,
             ],
         ];
     }
@@ -381,7 +536,16 @@ class RapportController extends Controller
         $rapport = McfRapport::with('user')->findOrFail($id);
         $entete  = Entete::singleton();
 
-        return view('pages.rapports.print_rapport', compact('rapport', 'entete'));
+        // Récupération des données statistiques détaillées (ou ré-agrégation si nécessaire)
+        $stats = $rapport->details_bruts ?? [];
+        if (empty($stats['par_type_facture']) || empty($stats['par_type_et_groupe_taxe'])) {
+            $debutStr = $rapport->date_debut ? $rapport->date_debut->toDateString() : ($rapport->date_rapport ? $rapport->date_rapport->toDateString() : now()->toDateString());
+            $finStr   = $rapport->date_fin ? $rapport->date_fin->toDateString() : ($rapport->date_rapport ? $rapport->date_rapport->toDateString() : now()->toDateString());
+            $donnees  = $this->agregerDonneesPeriode($debutStr, $finStr);
+            $stats    = array_merge($stats, $donnees['statistiques']);
+        }
+
+        return view('pages.rapports.print_rapport', compact('rapport', 'entete', 'stats'));
     }
 
     /**

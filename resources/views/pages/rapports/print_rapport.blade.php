@@ -73,15 +73,11 @@
         </div>
     </div>
 
-    <!-- En-tête officiel DGI -->
+    <!-- En-tête officiel Entreprise -->
     <div class="text-center">
-        <p class="fs-title">BURKINA FASO</p>
-        <p class="fs-sub">DIRECTION GÉNÉRALE DES IMPÔTS (DGI)</p>
-        <p>DISPOSITIF FISCAL ÉLECTRONIQUE SFE / MCF</p>
-        <div class="dashed-line"></div>
         <p class="fs-title">{{ $entete->denomination ?? 'ENTREPRISE' }}</p>
         <p>IFU : {{ $entete->ifu ?? '—' }} | RCCM : {{ $entete->rccm ?? '—' }}</p>
-        <p>ISF : {{ $entete->identifiant_sfe ?? '—' }} | CDI : {{ $entete->division_fiscal ?? '—' }}</p>
+        <p>ISF : {{ $entete->identifiant_sfe ?? $entete->isf ?? '—' }} | CDI : {{ $entete->division_fiscal ?? '—' }}</p>
         <p>Régime : {{ $entete->regime_fiscal ?? '—' }}</p>
         @if(!empty($entete->telephone))<p>Tél : {{ $entete->telephone }}</p>@endif
         @if(!empty($entete->infos_cadastrales))<p>Cadastre : {{ $entete->infos_cadastrales }}</p>@endif
@@ -92,9 +88,9 @@
     <div class="text-center">
         <p class="fs-title">
             @if($rapport->type_rapport === 'Z')
-                *** CLÔTURE JOURNALIÈRE FISCALE (RAPPORT Z) ***
+                *** CLÔTURE FISCALE (RAPPORT Z) ***
             @else
-                *** LECTURE JOURNALIÈRE FISCALE (RAPPORT X) ***
+                *** LECTURE FISCALE (RAPPORT X) ***
             @endif
         </p>
         <p class="fs-sub fw-bold">N° : {{ $rapport->numero_rapport }}</p>
@@ -112,39 +108,137 @@
     </div>
     <div class="dashed-line"></div>
 
-    <!-- Ventilation TVA par groupes DGI -->
-    <p class="fw-bold fs-sub text-center">VENTILATION PAR GROUPES DE TAXES (SECeF)</p>
+    @php
+        $statData = $stats ?? ($rapport->details_bruts ?? []);
+        $parType = $statData['par_type_facture'] ?? [];
+        $totalNb = 0; $totalHt = 0; $totalTva = 0; $totalTtc = 0;
+    @endphp
+
+    <!-- 1. Récapitulatif par type de facture (Norme DGI SECeF) -->
+    <p class="fw-bold fs-sub text-center">1. RÉCAPITULATIF PAR TYPE DE FACTURE</p>
     <table>
         <thead>
             <tr>
-                <th class="text-start">Groupe</th>
-                <th class="text-center">Taux</th>
-                <th class="text-end">Base HT</th>
-                <th class="text-end">TVA</th>
-                <th class="text-end">TS</th>
+                <th class="text-start">Type</th>
+                <th class="text-center">Nb</th>
+                <th class="text-end">HT (FCFA)</th>
+                <th class="text-end">TVA (FCFA)</th>
+                <th class="text-end">TTC (FCFA)</th>
             </tr>
         </thead>
         <tbody>
-            @php $detailsTaxes = $rapport->details_taxes ?? []; @endphp
-            @foreach($detailsTaxes as $codeG => $g)
-            <tr>
-                <td class="text-start">{{ $codeG }} - {{ $g['libelle'] ?? '' }}</td>
-                <td class="text-center">{{ isset($g['taux']) && $g['taux'] > 0 ? $g['taux'].'%' : '0%' }}</td>
-                <td class="text-end">{{ number_format($g['base_ht'] ?? 0, 0, ',', ' ') }}</td>
-                <td class="text-end fw-bold">{{ number_format($g['tva'] ?? 0, 0, ',', ' ') }}</td>
-                <td class="text-end">{{ number_format($g['ts'] ?? 0, 0, ',', ' ') }}</td>
-            </tr>
+            @foreach(['EA', 'EV', 'FA', 'FT', 'FV'] as $tCode)
+                @php
+                    $tRow = $parType[$tCode] ?? ['count' => 0, 'total_ht' => 0, 'total_tva' => 0, 'total_ttc' => 0];
+                    $totalNb += (int)($tRow['count'] ?? 0);
+                    $totalHt += (float)($tRow['total_ht'] ?? 0);
+                    $totalTva += (float)($tRow['total_tva'] ?? 0);
+                    $totalTtc += (float)($tRow['total_ttc'] ?? 0);
+                @endphp
+                <tr>
+                    <td class="text-start fw-bold">{{ $tCode }}</td>
+                    <td class="text-center">{{ $tRow['count'] ?? 0 }}</td>
+                    <td class="text-end">{{ number_format($tRow['total_ht'] ?? 0, 0, ',', ' ') }}</td>
+                    <td class="text-end">{{ number_format($tRow['total_tva'] ?? 0, 0, ',', ' ') }}</td>
+                    <td class="text-end fw-bold">{{ number_format($tRow['total_ttc'] ?? 0, 0, ',', ' ') }}</td>
+                </tr>
             @endforeach
+            <tr style="border-top: 1px solid #000; border-bottom: 2px solid #000; font-weight: bold;">
+                <td class="text-start">TOTAL</td>
+                <td class="text-center">{{ $totalNb }}</td>
+                <td class="text-end">{{ number_format($totalHt, 0, ',', ' ') }}</td>
+                <td class="text-end">{{ number_format($totalTva, 0, ',', ' ') }}</td>
+                <td class="text-end">{{ number_format($totalTtc, 0, ',', ' ') }}</td>
+            </tr>
         </tbody>
     </table>
     <div class="dashed-line"></div>
 
-    <!-- Récapitulatif Financier Global -->
-    <p class="fw-bold fs-sub text-center">RÉCAPITULATIF FINANCIER GLOBAL</p>
+    @php
+        $parTypeGroupe = $statData['par_type_et_groupe_taxe'] ?? [];
+    @endphp
+
+    <!-- 2. Montants par groupe de taxation et type de facture (Norme DGI SECeF) -->
+    <p class="fw-bold fs-sub text-center">2. MONTANTS PAR GROUPE DE TAXATION ET TYPE DE FACTURE</p>
+    <table>
+        <thead>
+            <tr>
+                <th class="text-start" style="width: 10%;">Type</th>
+                <th class="text-center" style="width: 8%;">Grp</th>
+                <th class="text-start" style="width: 34%;">Description</th>
+                <th class="text-center" style="width: 10%;">Taux</th>
+                <th class="text-end" style="width: 12%;">HT (FCFA)</th>
+                <th class="text-end" style="width: 12%;">TVA (FCFA)</th>
+                <th class="text-end" style="width: 14%;">TTC (FCFA)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($parTypeGroupe as $row)
+            <tr>
+                <td class="text-start fw-bold">{{ $row['type'] }}</td>
+                <td class="text-center fw-bold">{{ $row['groupe'] }}</td>
+                <td class="text-start">{{ $row['description'] }}</td>
+                <td class="text-center">{{ isset($row['taux']) && $row['taux'] > 0 ? $row['taux'].'%' : '0%' }}</td>
+                <td class="text-end">{{ number_format($row['ht'] ?? 0, 0, ',', ' ') }}</td>
+                <td class="text-end">{{ number_format($row['tva'] ?? 0, 0, ',', ' ') }}</td>
+                <td class="text-end fw-bold">{{ number_format($row['ttc'] ?? 0, 0, ',', ' ') }}</td>
+            </tr>
+            @empty
+                @php $detailsTaxes = $rapport->details_taxes ?? ($statData['groupes_taxes'] ?? []); @endphp
+                @foreach($detailsTaxes as $codeG => $g)
+                <tr>
+                    <td class="text-start fw-bold">FV</td>
+                    <td class="text-center fw-bold">{{ $codeG }}</td>
+                    <td class="text-start">{{ $g['libelle'] ?? '' }}</td>
+                    <td class="text-center">{{ isset($g['taux']) && $g['taux'] > 0 ? $g['taux'].'%' : '0%' }}</td>
+                    <td class="text-end">{{ number_format($g['base_ht'] ?? 0, 0, ',', ' ') }}</td>
+                    <td class="text-end">{{ number_format($g['tva'] ?? 0, 0, ',', ' ') }}</td>
+                    <td class="text-end fw-bold">{{ number_format(($g['base_ht'] ?? 0) + ($g['tva'] ?? 0) + ($g['ts'] ?? 0), 0, ',', ' ') }}</td>
+                </tr>
+                @endforeach
+            @endforelse
+        </tbody>
+    </table>
+    <div class="dashed-line"></div>
+
+    @php
+        $detailsReg = $statData['modes_paiement'] ?? ($rapport->details_reglements ?? []);
+        $totalReglements = 0;
+    @endphp
+
+    <!-- 3. Montants par mode de paiement (Norme DGI SECeF) -->
+    <p class="fw-bold fs-sub text-center">3. MONTANTS PAR MODE DE PAIEMENT</p>
+    <table>
+        <thead>
+            <tr>
+                <th class="text-start">Mode de paiement</th>
+                <th class="text-end">Montant (FCFA)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($detailsReg as $mode => $mt)
+                @if($mt != 0)
+                @php $totalReglements += (float)$mt; @endphp
+                <tr>
+                    <td class="text-start">{{ $mode }}</td>
+                    <td class="text-end fw-bold">{{ number_format($mt, 0, ',', ' ') }}</td>
+                </tr>
+                @endif
+            @endforeach
+            <tr style="border-top: 1px solid #000; font-weight: bold;">
+                <td class="text-start">TOTAL RÈGLEMENTS :</td>
+                <td class="text-end">{{ number_format($totalReglements, 0, ',', ' ') }} FCFA</td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="dashed-line"></div>
+
+    <!-- Synthèse Financière & Contrôles DGI -->
+    <p class="fw-bold fs-sub text-center">SYNTHÈSE FINANCIÈRE & CONTRÔLES DGI</p>
     <table>
         <tbody>
             <tr>
-                <td class="text-start">Chiffre d'Affaires HT :</td>
+                <td class="text-start">Chiffre d'Affaires Brut HT :</td>
                 <td class="text-end fw-bold">{{ number_format($rapport->chiffre_affaires_ht, 0, ',', ' ') }} FCFA</td>
             </tr>
             <tr>
@@ -159,60 +253,35 @@
             @endif
             @if($rapport->total_psvb > 0)
             <tr>
-                <td class="text-start">Total PSVB Collecté :</td>
+                <td class="text-start">Total PSVB / BIC Collecté :</td>
                 <td class="text-end">{{ number_format($rapport->total_psvb, 0, ',', ' ') }} FCFA</td>
             </tr>
             @endif
             @if($rapport->total_timbre > 0)
             <tr>
-                <td class="text-start">Total Timbre Quittance (Espèces) :</td>
+                <td class="text-start">Total Timbre Quittance :</td>
                 <td class="text-end">{{ number_format($rapport->total_timbre, 0, ',', ' ') }} FCFA</td>
             </tr>
             @endif
             @if($rapport->reductions_commerciales > 0)
             <tr>
-                <td class="text-start">Réductions accordées :</td>
-                <td class="text-end">- {{ number_format($rapport->reductions_commerciales, 0, ',', ' ') }} FCFA</td>
+                <td class="text-start text-danger">Toutes les réductions commerciales accordées :</td>
+                <td class="text-end text-danger fw-bold">- {{ number_format($rapport->reductions_commerciales, 0, ',', ' ') }} FCFA</td>
             </tr>
             @endif
-            <tr style="border-top: 1px solid #000; border-bottom: 2px solid #000;">
-                <td class="text-start fs-title fw-bold">TOTAL TTC NET :</td>
-                <td class="text-end fs-title fw-bold">{{ number_format($rapport->total_ttc, 0, ',', ' ') }} FCFA</td>
-            </tr>
-        </tbody>
-    </table>
-    <div class="dashed-line"></div>
-
-    <!-- Modes de paiement -->
-    <p class="fw-bold fs-sub text-center">RÉPARTITION PAR MODE DE PAIEMENT</p>
-    <table>
-        <tbody>
-            @php $detailsReg = $rapport->details_reglements ?? []; @endphp
-            @foreach($detailsReg as $mode => $mt)
+            @if($rapport->nb_factures_avoir > 0)
             <tr>
-                <td class="text-start">{{ $mode }} :</td>
-                <td class="text-end fw-bold">{{ number_format($mt, 0, ',', ' ') }} FCFA</td>
+                <td class="text-start text-danger">Total des Avoirs émis ({{ $rapport->nb_factures_avoir }}) :</td>
+                <td class="text-end text-danger fw-bold">- {{ number_format($statData['total_avoirs'] ?? 0, 0, ',', ' ') }} FCFA</td>
             </tr>
-            @endforeach
-        </tbody>
-    </table>
-    <div class="dashed-line"></div>
-
-    <!-- Statistiques opérationnelles -->
-    <p class="fw-bold fs-sub text-center">STATISTIQUES DES TRANSACTIONS</p>
-    <table>
-        <tbody>
+            @endif
             <tr>
-                <td>Nombre de Factures de Vente (FV) :</td>
-                <td class="text-end fw-bold">{{ $rapport->nb_factures_vente }}</td>
-            </tr>
-            <tr>
-                <td>Nombre de Factures d'Avoir (FA) :</td>
-                <td class="text-end fw-bold">{{ $rapport->nb_factures_avoir }}</td>
-            </tr>
-            <tr>
-                <td>Ventes incomplètes / Brouillons :</td>
+                <td class="text-start">Nombre de ventes incomplètes (brouillons/non signées) :</td>
                 <td class="text-end fw-bold">{{ $rapport->ventes_incompletes }}</td>
+            </tr>
+            <tr style="border-top: 1px solid #000; border-bottom: 2px solid #000;">
+                <td class="text-start fs-title fw-bold">TOTAL TTC NET PÉRIODE :</td>
+                <td class="text-end fs-title fw-bold">{{ number_format($rapport->total_ttc, 0, ',', ' ') }} FCFA</td>
             </tr>
         </tbody>
     </table>
