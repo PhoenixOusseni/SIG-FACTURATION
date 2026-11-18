@@ -643,8 +643,14 @@
         $qrData = $certif->qr_content ?? $facture->dgi_qrcode;
         $typeDoc = strtoupper(optional($facture->Typefacture)->code ?? 'FV');
         $isAvoir = in_array($typeDoc, ['FA', 'EA'], true);
-        $isExport = ($typeDoc === 'EV');
-        $isAcompte = in_array($typeDoc, ['FA', 'FT'], true) && !$isAvoir;
+        $titreDoc = match ($typeDoc) {
+            'EA' => "FACTURE D'AVOIR À L'EXPORTATION",
+            'FA' => "FACTURE D'AVOIR",
+            'ET' => "FACTURE D'ACOMPTE À L'EXPORTATION",
+            'EV' => "FACTURE DE VENTE À L'EXPORTATION",
+            'FT' => "FACTURE D'ACOMPTE OU D'AVANCE",
+            default => 'FACTURE DE VENTE',
+        };
         $isVenteExoneree = ($total_taxe == 0);
         $isHtMode = true;
         if (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) {
@@ -689,17 +695,11 @@
 
             <!-- Colonne 3 : Identification Document (28%) -->
             <div class="header-col-doc">
-                <div class="doc-title" style="{{ (!empty($isExport) || $typeDoc === 'EV' || $typeDoc === 'EA') ? 'font-size: 10px;' : '' }}">
+                <div class="doc-title" style="{{ in_array($typeDoc, ['EV', 'ET', 'EA'], true) ? 'font-size: 10px;' : '' }}">
                     @if($facture->statut === 'BROUILLON')
                         PROJET DE FACTURE (BROUILLON)
-                    @elseif($isAvoir)
-                        {{ $typeDoc === 'EA' ? "FACTURE D'AVOIR À L'EXPORTATION" : "FACTURE D'AVOIR" }}
-                    @elseif(!empty($isExport) || $typeDoc === 'EV')
-                        FACTURE DE VENTE À L'EXPORTATION
-                    @elseif(!empty($isAcompte) || in_array($typeDoc, ['FA', 'FT'], true))
-                        FACTURE D'ACOMPTE OU D'AVANCE
                     @else
-                        FACTURE DE VENTE
+                        {{ $titreDoc }}
                     @endif
                     @if(!empty($isDuplicata))
                         <span style="display: block; font-size: 9.5px; color: #dc2626; font-weight: 800; letter-spacing: 1px; margin-top: 2px;">(DUPLICATA)</span>

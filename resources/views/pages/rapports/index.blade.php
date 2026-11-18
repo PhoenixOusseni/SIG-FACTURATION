@@ -305,11 +305,11 @@
                             <td class="fw-bold font-monospace">{{ $rap->numero_rapport }}</td>
                             <td>
                                 @if($rap->type_rapport === 'Z')
-                                    <span class="badge badge-z">CLÔTURE Z</span>
+                                    <span class="badge bg-danger">CLÔTURE Z</span>
                                 @elseif($rap->type_rapport === 'A')
-                                    <span class="badge badge-a">ARTICLES A</span>
+                                    <span class="badge bg-success">ARTICLES A</span>
                                 @else
-                                    <span class="badge badge-x">RAPPORT X</span>
+                                    <span class="badge bg-primary">RAPPORT X</span>
                                 @endif
                             </td>
                             <td>{{ $rap->date_rapport ? $rap->date_rapport->format('d/m/Y H:i:s') : $rap->created_at->format('d/m/Y H:i:s') }}</td>

@@ -513,7 +513,7 @@ class FactureAvoirController extends Controller
             if (!$produitId) {
                 continue;
             }
-            $qte = (float) ($quantites[$index] ?? 0);
+            $qte = round((float) ($quantites[$index] ?? 0), 3);
             if ($qte <= 0) {
                 continue;
             }

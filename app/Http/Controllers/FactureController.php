@@ -128,7 +128,7 @@ class FactureController extends Controller
         $bics = Bic::orderBy('code')->get();
         $categories = \App\Models\Categorie::orderBy('code')->get();
         $tvas = \App\Models\Tva::orderBy('code')->get();
-        $services = \App\Models\Service::orderBy('nom')->get();
+        $services = \App\Models\Service::orderBy('libelle')->get();
         $entete = Entete::singleton();
 
         // Détection de la connexion réelle au boîtier MCF Eltrade / Émulateur
@@ -571,7 +571,7 @@ class FactureController extends Controller
      */
     public function print($id)
     {
-        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Bic', 'ModePaie', 'Reglements', 'FactureAvoirs', 'McfCertifications'])->findOrFail($id);
+        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Bic', 'ModePaie', 'Typefacture', 'Reglements', 'FactureAvoirs', 'McfCertifications'])->findOrFail($id);
         $elements = ElementFacture::with(['Produit.tva'])->where('facture_id', $facture->id)->get();
         $entete = Entete::singleton();
 
@@ -608,7 +608,7 @@ class FactureController extends Controller
      */
     public function printTicket($id)
     {
-        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Bic', 'ModePaie', 'Reglements', 'FactureAvoirs', 'McfCertifications'])->findOrFail($id);
+        $facture = Facture::with(['Contribuable.Categorie', 'Service', 'Categorie', 'User', 'Bic', 'ModePaie', 'Typefacture', 'Reglements', 'FactureAvoirs', 'McfCertifications'])->findOrFail($id);
         $elements = ElementFacture::with(['Produit.tva'])->where('facture_id', $facture->id)->get();
         $entete = Entete::singleton();
 

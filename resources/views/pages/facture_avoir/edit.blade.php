@@ -190,7 +190,7 @@
                                                     </td>
                                                     <td>
                                                         <input class="form-control text-center qte-input"
-                                                            name="quantite[]" type="number" step="0.01"
+                                                            name="quantite[]" type="number" step="0.001"
                                                             value="{{ $element->quantite }}" placeholder="1" />
                                                     </td>
                                                     <td>
@@ -224,7 +224,7 @@
                                                     </td>
                                                     <td>
                                                         <input class="form-control text-center qte-input"
-                                                            name="quantite[]" type="number" step="0.01"
+                                                            name="quantite[]" type="number" step="0.001"
                                                             placeholder="1" />
                                                     </td>
                                                     <td>

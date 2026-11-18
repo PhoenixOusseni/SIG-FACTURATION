@@ -885,7 +885,7 @@
                                             <select name="service_id" class="form-select">
                                                 <option value="">-- Sélectionner un magasin / dépôt --</option>
                                                 @foreach ($services as $srv)
-                                                    <option value="{{ $srv->id }}" {{ old('service_id') == $srv->id ? 'selected' : '' }}>{{ $srv->nom }}</option>
+                                                    <option value="{{ $srv->id }}" {{ old('service_id') == $srv->id ? 'selected' : '' }}>{{ $srv->libelle }}</option>
                                                 @endforeach
                                             </select>
                                         </div>
@@ -1455,7 +1455,7 @@
                                 <label class="form-label fw-semibold">Dépôt / Service d'Expédition <span class="text-danger">*</span></label>
                                 <select name="service_id" class="form-select" required>
                                     @foreach ($services as $serv)
-                                        <option value="{{ $serv->id }}">{{ $serv->nom }}</option>
+                                        <option value="{{ $serv->id }}">{{ $serv->libelle }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -2364,7 +2364,7 @@
                                     <span class="badge bg-secondary">Épuisé (0)</span>
                                     <input type="hidden" name="quantite[]" class="avoir-qte-input" value="0" max="0">
                                 ` : `
-                                    <input type="number" step="0.01" min="0" max="${qteRest}" name="quantite[]"
+                                    <input type="number" step="0.001" min="0" max="${qteRest}" name="quantite[]"
                                         class="form-control form-control-sm font-monospace avoir-qte-input text-center fw-bold"
                                         value="${qteRest}" oninput="recalcAvoirRow(this)">
                                     <small class="text-muted d-block" style="font-size: 10px;">Max restant: ${qteRest}</small>

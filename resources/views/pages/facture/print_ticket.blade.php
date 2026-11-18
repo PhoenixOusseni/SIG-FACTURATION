@@ -78,7 +78,16 @@
         $cptDgi = $certif ? ($certif->compteur_facture . '/' . $certif->compteur_total . ' ' . $certif->type_facture) : $facture->dgi_compteur;
         $heureDgi = $certif?->date_certification?->format('d/m/Y H:i:s') ?? ($facture->dgi_signature ? \Carbon\Carbon::parse($facture->date)->format('d/m/Y H:i:s') : null);
         $qrData = $certif->qr_content ?? $facture->dgi_qrcode;
-        $isAvoir = in_array(strtoupper(optional($facture->Typefacture)->code ?? 'FV'), ['FA', 'EA'], true);
+        $typeDoc = strtoupper(optional($facture->Typefacture)->code ?? 'FV');
+        $isAvoir = in_array($typeDoc, ['FA', 'EA'], true);
+        $titreDoc = match ($typeDoc) {
+            'EA' => "FACTURE D'AVOIR À L'EXPORTATION",
+            'FA' => "FACTURE D'AVOIR",
+            'ET' => "FACTURE D'ACOMPTE À L'EXPORTATION",
+            'EV' => "FACTURE DE VENTE À L'EXPORTATION",
+            'FT' => "FACTURE D'ACOMPTE OU D'AVANCE",
+            default => 'FACTURE DE VENTE',
+        };
     @endphp
 
     <!-- En-tête Entreprise -->
@@ -95,14 +104,8 @@
         <p class="subtitle">
             @if($facture->statut === 'BROUILLON')
                 PROJET DE FACTURE (BROUILLON)
-            @elseif($isAvoir)
-                {{ strtoupper(optional($facture->Typefacture)->code ?? '') === 'EA' ? "FACTURE D'AVOIR À L'EXPORTATION" : "FACTURE D'AVOIR" }}
-            @elseif(strtoupper(optional($facture->Typefacture)->code ?? '') === 'EV')
-                FACTURE DE VENTE À L'EXPORTATION
-            @elseif(in_array(strtoupper(optional($facture->Typefacture)->code ?? ''), ['FA', 'FT'], true))
-                FACTURE D'ACOMPTE OU D'AVANCE
             @else
-                FACTURE DE VENTE
+                {{ $titreDoc }}
             @endif
         </p>
         @if(!empty($isDuplicata))
