@@ -186,6 +186,48 @@ Conformément à l'exigence réglementaire SECeF stipulant que le SFE doit pouvo
   - Contrôle strict du solde fiscal disponible sur la facture d'origine.
   - Réintégration automatique des articles physiques retournés dans le stock du magasin (`$produit->increment('qte', $qte)`).
 
+### 3.7 Gestion des Réductions Commerciales par Article (Ligne)
+- **Saisie par Ligne** : Chaque article dispose d'une remise configurable soit en **pourcentage** (`%`), soit en **montant fixe** (`FCFA`).
+- **Cascade Fiscale** : La remise de ligne s'applique immédiatement sur le brut HT de l'article ($\text{Net HT} = \text{Qté} \times \text{PU} - \text{Remise Ligne}$). Toute remise globale additionnelle de pied de facture est ensuite répartie au prorata sur la valeur nette résiduelle.
+- **Affichage sur Facture** : La colonne `REMISE` du tableau des articles affiche le montant exact déduit pour chaque article (ou `-` si aucune réduction).
+
+### 3.8 Précision Décimale DGI et Intégration de la Taxe Spécifique (TS)
+- **Règle des Décimales SECeF** :
+  - Les quantités acceptent et conservent jusqu'à **3 chiffres après la virgule** (ex: `3,745`).
+  - Les prix unitaires acceptent jusqu'à **2 chiffres après la virgule** (ex: `250,00` ou `250,50`).
+  - Les montants calculés conservent intégralement leurs décimales au centime le plus proche avec un maximum de 2 décimales (ex: $3{,}745 \times 250 = \mathbf{936{,}25\text{ FCFA}}$, sans arrondi abusif à l'entier).
+- **Intégration de la Taxe Spécifique (TS) dans la Base Imposable** :
+  - En droit fiscal burkinabè, la Taxe Spécifique fait partie intégrante de l'assiette imposable à la TVA.
+  - Sur chaque ligne d'article, la colonne `TOTAL HT` correspond à la base imposable légale : $(\text{Qté} \times \text{PU HT}) + \text{TS} - \text{Remise Ligne}$.
+  - Dans le tableau récapitulatif fiscal DGI (`tva_groups`), la colonne `Base HT` intègre la TS (ex: pour une vente de 200 000 avec 2 000 de TS, la Base HT du Groupe B 18% est de **`202 000`** et la TVA est de **`36 360`**).
+  - La synthèse financière de droite fait ressortir la **Total Base Imposable HT** en parfaite concordance arithmétique avec le tableau de TVA.
+
+### 3.9 Types de Factures MCF (`FT`/`ET`), Balancement des Paiements et Mode Prix HT/TTC
+- **Transmission Intégrale des Types de Factures au Boîtier MCF** :
+  - Le SFE transmet désormais au boîtier MCF la totalité des types prévus par le protocole DGI SECeF ST 1.0 :
+    - `FV` : Facture de vente locale au comptant.
+    - `FT` : Facture d'acompte ou vente à terme locale (incrémente le compteur `FT` sur le boîtier et sur les rapports Z/X).
+    - `EV` : Facture de vente directe à l'exportation.
+    - `ET` : Facture d'acompte à l'exportation.
+    - `FA` : Facture d'avoir locale.
+    - `EA` : Facture d'avoir à l'exportation.
+- **Protocole d'Émission des Factures d'Avoir (`FA` / `EA`)** :
+  - Commande `C3h` (Client) : Identité et coordonnées de l'acheteur.
+  - Commande `C0h` (Ouverture Avoir) : Transmet la nature de l'avoir (`COR`, `RAN`, `RAM` ou `RRR`) et sa référence originale (`RRR` pour les remises globales, code fiscal SECeF pour les retours/corrections).
+  - Commande `31h` (Articles) : Montants et quantités saisis positivement, déduits en mémoire fiscale par l'indicateur d'avoir.
+  - Commande `35h` & `38h` : Mode de remboursement et clôture avec signature cryptographique et QR Code officiel.
+- **Résolution des Dépassements de Centimes sur les Règlements & Équilibrage DGI** :
+  - La comparaison entre la somme des modes de paiement et le Net TTC à payer applique désormais une précision à deux décimales flottantes avec une marge de tolérance d'epsilon ($|\text{Total Modes} - \text{Net TTC}| \le 0{,}50\text{ FCFA}$). Cela élimine tout blocage intempestif ou faux message d'écart (ex: « Dépassement de 0,3 FCFA »).
+  - Les champs de saisie des règlements (`reglement_montant[]` et `acompte_montant`) adoptent l'attribut HTML5 `step="0.01"`, autorisant la saisie de centimes sans déclencher de popup d'arrondi forcé du navigateur.
+- **Isolation Stricte des Remises par Article et Remises Globales** :
+  - Le champ `factures.remise_1` conserve strictement le montant de la remise commerciale globale de pied de facture. Les remises par article sont portées au niveau ligne (`remise_valeur`, `remise_type`, `remise_montant`).
+  - Cette dissociation élimine tout risque de double déduction au moment de la signature et garantit la cohérence mathématique absolue des montants soumis à la commande 31h du boîtier MCF Eltrade CC300, prévenant l'erreur `31h : La taxe est incorrecte!`.
+- **Formules Algébriques Déterministes de Conversion HT <-> TTC** :
+  - En présence de Taxe Spécifique (TS), la formule de rétro-calcul depuis un prix TTC saisi rétablit la stricte assiette de TVA sans dérive :
+    $$\text{PU HT} = \frac{\text{PU TTC}}{1 + \text{TVA}} - \text{TS}_{\text{montant}} = \frac{\text{PU TTC} - \text{TS}_{\text{montant}} \times (1 + \text{TVA})}{1 + \text{TVA}}$$
+    $$\text{PU HT} = \frac{\text{PU TTC}}{(1 + \text{TS}_{\%}) \times (1 + \text{TVA})}$$
+  - Le système garantit que les prix unitaires persistés en base de données sont universellement normalisés en Hors Taxes (HT).
+
 ---
 
 ## 4. Spécification des Rapports Statistiques DGI (Standard SECeF 4.3)

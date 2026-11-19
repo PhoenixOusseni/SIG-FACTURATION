@@ -103,7 +103,7 @@ class Produit extends Model
         $type = $this->type_dgi;
         $stockStr = $this->isService()
             ? 'Prestation'
-            : ('Stock: ' . ((float)$this->qte == (int)$this->qte ? number_format($this->qte, 0, ',', ' ') : number_format($this->qte, 2, ',', ' ')));
+            : ('Stock: ' . ((float)$this->qte == (int)$this->qte ? number_format($this->qte, 0, ',', ' ') : rtrim(rtrim(number_format($this->qte, 3, ',', ' '), '0'), ',')));
 
         return "{$code}{$nom} — [{$groupe}] — [{$type}] · {$stockStr}";
     }

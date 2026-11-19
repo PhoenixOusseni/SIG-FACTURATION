@@ -198,19 +198,28 @@ class VirtualMcfService
         foreach ($facture->ElementFactures as $element) {
             $quantite  = (float) $element->quantite;
             $prix      = (float) $element->prix_unitaire;
-            $montantHt = $quantite * $prix;
+            $remiseLigne = (float) ($element->calculated_remise ?? 0);
+            $montantHt = max(0, ($quantite * $prix) - $remiseLigne);
             $produit   = $element->Produit;
             $taux      = (float) optional(optional($produit)->tva)->taux;
 
+            $tsUnit = 0.0;
+            if ($produit) {
+                if ($produit->type_ts === 'POURCENTAGE' && (float) ($produit->pourcentage_ts ?? 0) > 0) {
+                    $tsUnit = round($prix * ((float) $produit->pourcentage_ts / 100.0), 2);
+                } else {
+                    $tsUnit = (float) ($produit->montant_ts ?? 0);
+                }
+            }
+            $tsLigne = round($tsUnit * $quantite, 2);
+            $totalTs += $tsLigne;
+
             $key = number_format($taux, 2, '.', '');
             if (!isset($parTaux[$key])) {
-                $parTaux[$key] = ['taux' => $taux, 'base' => 0.0];
+                $parTaux[$key] = ['taux' => $taux, 'base_ht' => 0.0, 'ts' => 0.0];
             }
-            $parTaux[$key]['base'] += $montantHt;
-
-            if ($produit && (float) $produit->montant_ts > 0) {
-                $totalTs += (float) $produit->montant_ts * $quantite;
-            }
+            $parTaux[$key]['base_ht'] += $montantHt;
+            $parTaux[$key]['ts'] += $tsLigne;
         }
 
         ksort($parTaux, SORT_NUMERIC);
@@ -222,14 +231,15 @@ class VirtualMcfService
         $i = 0;
 
         foreach ($parTaux as $g) {
-            $taxe = $g['base'] * $g['taux'] / 100;
+            $baseTva = round($g['base_ht'] + $g['ts'], 2);
+            $taxe = round($baseTva * ($g['taux'] / 100), 2);
             $groupes[] = [
                 'groupe' => $lettres[$i] ?? ('G' . $i),
                 'taux'   => $g['taux'],
-                'base'   => round($g['base'], 2),
-                'taxe'   => round($taxe, 2),
+                'base'   => $baseTva,
+                'taxe'   => $taxe,
             ];
-            $totalHt  += $g['base'];
+            $totalHt  += $g['base_ht'];
             $totalTva += $taxe;
             $i++;
         }

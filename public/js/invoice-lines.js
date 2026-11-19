@@ -15,6 +15,8 @@
             productSelect: '.base-taxable-select',
             qtyInput: '.qte-input',
             priceInput: '.prix-input',
+            discountValInput: '.remise-val-input',
+            discountTypeSelect: '.remise-type-select',
             montantCell: '.montant-cell',
             grandTotal: '#grandTotal',
             addRowBtn: '#addRowBtn',
@@ -27,6 +29,8 @@
             productName: 'produits_id[]',
             qtyName: 'quantite[]',
             priceName: 'prix_unitaire[]',
+            discountValName: 'remise_valeur[]',
+            discountTypeName: 'remise_type[]',
             includeElementId: false,
         },
 
@@ -65,10 +69,12 @@
         },
 
         formatMontant: function (n) {
+            const val = parseFloat(n) || 0;
+            const hasDecimals = Math.abs(val % 1) > 0.001;
             return new Intl.NumberFormat('fr-FR', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-            }).format(Math.round(n || 0)) + ' FCFA';
+                minimumFractionDigits: hasDecimals ? 2 : 0,
+                maximumFractionDigits: 2,
+            }).format(val);
         },
 
         productLabel: function (id, data) {
@@ -136,7 +142,18 @@
         recalcRow: function ($row) {
             const qte = parseFloat($row.find(this.options.qtyInput).val()) || 0;
             const prix = parseFloat($row.find(this.options.priceInput).val()) || 0;
-            const montant = qte * prix;
+            const brut = qte * prix;
+            const remVal = parseFloat($row.find(this.options.discountValInput).val()) || 0;
+            const remType = $row.find(this.options.discountTypeSelect).val() || 'POURCENTAGE';
+            let remLigne = 0;
+            if (remVal > 0 && brut > 0) {
+                if (remType === 'MONTANT') {
+                    remLigne = Math.min(brut, Math.max(0, remVal));
+                } else {
+                    remLigne = brut * (Math.min(100, Math.max(0, remVal)) / 100);
+                }
+            }
+            const montant = Math.max(0, brut - remLigne);
             $row.find(this.options.montantCell).text(this.formatMontant(montant));
             return montant;
         },
@@ -295,6 +312,12 @@
                 $row.find(this.options.qtyInput).val(this.options.defaultQty || 1);
             }
 
+            // Ensure discount is initialized to 0 if empty
+            const currentRem = $row.find(this.options.discountValInput).val();
+            if (currentRem === '' || currentRem === undefined || currentRem === null) {
+                $row.find(this.options.discountValInput).val('0');
+            }
+
             this.recalcAll();
         },
 
@@ -306,16 +329,25 @@
 
             const newRow = $(
                 '<tr class="element-row">' +
-                    '<td class="text-center"><span class="row-index">#</span>' + elementIdHidden + '</td>' +
-                    '<td>' +
+                    '<td class="text-center col-index"><span class="row-index">#</span>' + elementIdHidden + '</td>' +
+                    '<td class="col-article">' +
                         '<select class="form-select base-taxable-select select2-input" name="' + this.options.productName + '" style="width:100%">' +
                             this.buildOptionsHtml() +
                         '</select>' +
                     '</td>' +
-                    '<td><input class="form-control text-end prix-input font-monospace" name="' + this.options.priceName + '" type="number" step="0.01" min="0.01" placeholder="0.00" /></td>' +
-                    '<td><input class="form-control text-center qte-input font-monospace" name="' + this.options.qtyName + '" type="number" step="0.001" min="0.001" placeholder="1" /></td>' +
-                    '<td class="text-end montant-cell">0</td>' +
-                    '<td class="text-center">' +
+                    '<td class="col-price"><input class="form-control text-end prix-input font-monospace" name="' + this.options.priceName + '" type="number" step="0.01" min="0.01" placeholder="0.00" /></td>' +
+                    '<td class="col-qty"><input class="form-control text-center qte-input font-monospace" name="' + this.options.qtyName + '" type="number" step="0.001" min="0.001" placeholder="1" /></td>' +
+                    '<td class="col-remise">' +
+                        '<div class="input-group input-group-sm remise-input-group">' +
+                            '<input class="form-control text-end remise-val-input font-monospace" name="' + this.options.discountValName + '" type="number" step="0.01" min="0" value="0" placeholder="0" />' +
+                            '<select class="form-select remise-type-select" name="' + this.options.discountTypeName + '">' +
+                                '<option value="POURCENTAGE">%</option>' +
+                                '<option value="MONTANT">FCFA</option>' +
+                            '</select>' +
+                        '</div>' +
+                    '</td>' +
+                    '<td class="text-end col-total montant-cell">0,00</td>' +
+                    '<td class="text-center col-action">' +
                         '<button type="button" class="btn-remove-row removeRowBtn">' +
                             '<i data-feather="trash-2" style="width:15px;height:15px;"></i>' +
                         '</button>' +
@@ -379,6 +411,8 @@
                 const $qty = $row.find(self.options.qtyInput).val(line.quantite || '');
                 if (line.quantite) $qty.attr('max', line.quantite);
                 $row.find(self.options.priceInput).val(line.prix_unitaire || '');
+                if (line.remise_valeur !== undefined) $row.find(self.options.discountValInput).val(line.remise_valeur);
+                if (line.remise_type !== undefined) $row.find(self.options.discountTypeSelect).val(line.remise_type);
             });
 
             this.renumberRows();
@@ -415,8 +449,8 @@
                     self.onProductChange(this);
                 });
 
-            $(document).off('input.invoiceLines', this.options.qtyInput + ', ' + this.options.priceInput)
-                .on('input.invoiceLines', this.options.qtyInput + ', ' + this.options.priceInput, function () {
+            $(document).off('input.invoiceLines change.invoiceLines', this.options.qtyInput + ', ' + this.options.priceInput + ', ' + this.options.discountValInput + ', ' + this.options.discountTypeSelect)
+                .on('input.invoiceLines change.invoiceLines', this.options.qtyInput + ', ' + this.options.priceInput + ', ' + this.options.discountValInput + ', ' + this.options.discountTypeSelect, function () {
                     self.recalcAll();
                 });
 

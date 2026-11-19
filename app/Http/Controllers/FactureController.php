@@ -263,6 +263,13 @@ class FactureController extends Controller
 
             $proformaId = $request->filled('facture_proforma_id') ? (int) $request->input('facture_proforma_id') : null;
 
+            // Remise globale de pied de facture
+            $globalRemVal = (float) $request->input('global_remise_valeur', 0);
+            $remise1 = 0.0;
+            if ($globalRemVal > 0) {
+                $remise1 = (float) $request->input('remise_1', 0);
+            }
+
             $facture = Facture::create([
                 'reference'           => $request->reference,
                 'date'                => $request->date ?? date('Y-m-d'),
@@ -273,8 +280,8 @@ class FactureController extends Controller
                 'typefacture_id'      => $request->typefacture_id ?? null,
                 'modepaie_id'         => $request->modepaie_id ?? null,
                 'bic_id'              => $request->bic_id ?? null,
-                'remise_1'            => $request->remise_1 ?? 0,
-                'remise_2'            => $request->remise_2 ?? 0,
+                'remise_1'            => $remise1,
+                'remise_2'            => 0,
                 'facture_proforma_id' => $proformaId,
                 'notes'               => $notesJson,
             ]);
@@ -284,24 +291,49 @@ class FactureController extends Controller
             }
 
             if ($request->has('produits_id') && is_array($request->produits_id)) {
+                $remiseVals  = (array) $request->input('remise_valeur', []);
+                $remiseTypes = (array) $request->input('remise_type', []);
+
                 foreach ($request->produits_id as $index => $produitId) {
                     if (!empty($produitId)) {
                         $quantite     = (float) ($request->quantite[$index] ?? 0);
                         $prixUnitaire = (float) ($request->prix_unitaire[$index] ?? 0);
+                        $remVal       = (float) ($remiseVals[$index] ?? 0);
+                        $remType      = strtoupper((string) ($remiseTypes[$index] ?? 'POURCENTAGE'));
+
+                        $brutLigne = $quantite * $prixUnitaire;
+                        $remMnt = 0.0;
+                        if ($remVal > 0 && $brutLigne > 0) {
+                            if ($remType === 'MONTANT') {
+                                $remMnt = round(min($brutLigne, $remVal), 2);
+                            } else {
+                                $remMnt = round($brutLigne * (min(100, $remVal) / 100.0), 2);
+                            }
+                        }
 
                         ElementFacture::create([
-                            'facture_id'    => $facture->id,
-                            'produits_id'   => $produitId,
-                            'quantite'      => $quantite,
-                            'prix_unitaire' => $prixUnitaire,
-                            'designation'   => $request->designation[$index] ?? null,
+                            'facture_id'     => $facture->id,
+                            'produits_id'    => $produitId,
+                            'quantite'       => $quantite,
+                            'prix_unitaire'  => $prixUnitaire,
+                            'remise_type'    => $remType,
+                            'remise_valeur'  => ($remMnt > 0) ? $remVal : 0,
+                            'remise_montant' => $remMnt,
+                            'montant_total'  => max(0, round($brutLigne - $remMnt, 2)),
+                            'designation'    => $request->designation[$index] ?? null,
                         ]);
                     }
                 }
             }
 
+            // Calcul du Net à Payer officiel exact après insertion des lignes
+            $facture->load('ElementFactures.Produit.tva');
+            $exactNetAPayer = (float) $facture->montant_total;
+
             // 1. Sauvegarde des modes de paiement convenus (Norme DGI SECeF : mention légale sur facture)
-            $condReglement = $request->input('condition_reglement', 'COMPTANT');
+            $condReglement = strtoupper(trim((string) $request->input('condition_reglement', 'COMPTANT')));
+            $notesData['condition_reglement'] = $condReglement;
+
             $rModes = (array) $request->input('reglement_mode', []);
             $rMontants = (array) $request->input('reglement_montant', []);
             $rRefs = (array) $request->input('reglement_reference', []);
@@ -309,7 +341,7 @@ class FactureController extends Controller
             $modesConvenus = [];
             foreach ($rMontants as $rIdx => $rMnt) {
                 $rMnt = (float) $rMnt;
-                if ($rMnt > 0) {
+                if ($rMnt > 0 || count($rMontants) === 1) {
                     $mCode = strtoupper((string) ($rModes[$rIdx] ?? 'ESP'));
                     $rModeObj = ModePaie::where('code', $mCode)->orWhere('libelle', $mCode)->first();
                     $modesConvenus[] = [
@@ -320,10 +352,23 @@ class FactureController extends Controller
                     ];
                 }
             }
+
+            if ($condReglement === 'COMPTANT') {
+                if (count($modesConvenus) === 1) {
+                    $modesConvenus[0]['montant'] = $exactNetAPayer;
+                } elseif (!empty($modesConvenus)) {
+                    $sumSoFar = 0.0;
+                    for ($i = 0; $i < count($modesConvenus) - 1; $i++) {
+                        $sumSoFar += (float) $modesConvenus[$i]['montant'];
+                    }
+                    $modesConvenus[count($modesConvenus) - 1]['montant'] = max(0, round($exactNetAPayer - $sumSoFar, 2));
+                }
+            }
+
             if (!empty($modesConvenus)) {
                 $notesData['modes_paiement_convenus'] = $modesConvenus;
-                $facture->update(['notes' => json_encode($notesData, JSON_UNESCAPED_UNICODE)]);
             }
+            $facture->update(['notes' => json_encode($notesData, JSON_UNESCAPED_UNICODE)]);
 
             // 2. Gestion des règlements effectifs (encaissements sur-le-champ)
             // SI $condReglement === 'CREDIT', aucun règlement n'est créé (0 FCFA versé à l'émission)
@@ -718,6 +763,7 @@ class FactureController extends Controller
     protected function calculerSyntheseFacture(Facture $facture, $elements, Entete $entete): array
     {
         $total_ht_brut = 0.0;
+        $total_remise_lignes = 0.0;
         $total_ts = 0.0;
         $montant_transport = 0.0;
         $transport_label = 'Frais de transport';
@@ -735,8 +781,12 @@ class FactureController extends Controller
 
             $qte = (float) $element->quantite;
             $pu = (float) $element->prix_unitaire;
-            $montantLigneHt = $qte * $pu;
-            $total_ht_brut += $montantLigneHt;
+            $montantLigneBrut = $qte * $pu;
+            $total_ht_brut += $montantLigneBrut;
+
+            $remiseLigne = (float) ($element->calculated_remise ?? 0);
+            $total_remise_lignes += $remiseLigne;
+            $ligneNetHt = max(0, round($montantLigneBrut - $remiseLigne, 2));
 
             $produit = $element->Produit;
             $tsUnit = 0.0;
@@ -747,7 +797,7 @@ class FactureController extends Controller
                     $tsUnit = (float) ($produit->montant_ts ?? 0);
                 }
             }
-            $tsLigne = $tsUnit * $qte;
+            $tsLigne = round($tsUnit * $qte, 2);
             $total_ts += $tsLigne;
 
             $groupe = strtoupper((string) optional(optional($produit)->tva)->code ?: 'A');
@@ -755,45 +805,53 @@ class FactureController extends Controller
 
             if (!isset($lignesParGroupe[$groupe])) {
                 $lignesParGroupe[$groupe] = [
-                    'groupe' => $groupe,
-                    'taux' => $tauxTva,
+                    'groupe'  => $groupe,
+                    'taux'    => $tauxTva,
                     'ht_brut' => 0.0,
-                    'ts' => 0.0,
+                    'ht_net'  => 0.0,
+                    'ts'      => 0.0,
                 ];
             }
-            $lignesParGroupe[$groupe]['ht_brut'] += $montantLigneHt;
-            $lignesParGroupe[$groupe]['ts'] += $tsLigne;
+            $lignesParGroupe[$groupe]['ht_brut'] += $montantLigneBrut;
+            $lignesParGroupe[$groupe]['ht_net']  += $ligneNetHt;
+            $lignesParGroupe[$groupe]['ts']      += $tsLigne;
         }
 
-        // Remises globales réparties au prorata du HT
+        // Remises globales additionnelles de pied de facture
+        $netApresRemiseLignes = max(0, $total_ht_brut - $total_remise_lignes);
         $remise_1 = (float) ($facture->remise_1 ?? 0);
         $remise_2 = (float) ($facture->remise_2 ?? 0);
-        $remise_totale = $remise_1 + $remise_2;
-        $net_commercial = max(0, $total_ht_brut - $remise_totale);
-        $prorata = $total_ht_brut > 0 ? ($net_commercial / $total_ht_brut) : 1.0;
+        $remise_globale = $remise_1 + $remise_2;
+        $remise_totale = $total_remise_lignes + $remise_globale;
+        $net_commercial = max(0, round($total_ht_brut - $remise_totale, 2));
+
+        $globalProrata = $netApresRemiseLignes > 0 ? (max(0, $netApresRemiseLignes - $remise_globale) / $netApresRemiseLignes) : 1.0;
 
         // Calcul exact de chaque groupe de TVA
         $tva_groups = [];
         $total_taxe = 0.0;
+        $total_base_imposable_ht = 0.0;
 
         ksort($lignesParGroupe);
         foreach ($lignesParGroupe as $grp => $info) {
-            $baseHt = round($info['ht_brut'] * $prorata, 2);
-            $baseTva = round($baseHt + $info['ts'], 2);
+            $baseHtPure = round($info['ht_net'] * $globalProrata, 2);
+            $baseTva = round($baseHtPure + $info['ts'], 2);
             $montantTva = round($baseTva * ($info['taux'] / 100), 2);
             $total_taxe += $montantTva;
+            $total_base_imposable_ht += $baseTva;
 
             $tva_groups[$grp] = [
-                'groupe' => $grp,
-                'taux' => $info['taux'],
-                'base' => $baseHt, // Base HT pure du groupe conforme au Total Net HT
-                'base_tva' => $baseTva, // Base taxable TVA (HT + TS)
-                'taxe' => $montantTva,
-                'ts' => $info['ts'],
+                'groupe'       => $grp,
+                'taux'         => $info['taux'],
+                'base'         => $baseTva, // Colonne BASE HT du tableau TVA DGI : Base imposable légale incluant la TS !
+                'base_ht_pure' => $baseHtPure,
+                'base_tva'     => $baseTva,
+                'taxe'         => $montantTva,
+                'ts'           => $info['ts'],
             ];
         }
 
-        $total_ttc_brut = $net_commercial + $total_ts + $total_taxe;
+        $total_ttc_brut = round($net_commercial + $total_ts + $total_taxe, 2);
 
         // PSVB (appliqué UNIQUEMENT sur les biens matériels LOCBIE / IMPBIE, jamais sur les services LOCSER / IMPSER)
         $tauxBic = (float) optional($facture->Bic)->taux;
@@ -806,17 +864,19 @@ class FactureController extends Controller
                 if ($produit && $produit->isBien()) {
                     $qte = (float) $element->quantite;
                     $pu = (float) $element->prix_unitaire;
-                    $ligneHt = $qte * $pu * $prorata;
+                    $remiseLigne = (float) ($element->calculated_remise ?? 0);
+                    $ligneHt = max(0, ($qte * $pu - $remiseLigne)) * $globalProrata;
+
                     $tsUnit = 0.0;
                     if ($produit->type_ts === 'POURCENTAGE' && (float) ($produit->pourcentage_ts ?? 0) > 0) {
                         $tsUnit = round($pu * ((float) $produit->pourcentage_ts / 100.0), 2);
                     } else {
                         $tsUnit = (float) ($produit->montant_ts ?? 0);
                     }
-                    $tsLigne = $tsUnit * $qte;
+                    $tsLigne = round($tsUnit * $qte, 2);
                     $tauxTvaLigne = (float) optional(optional($produit)->tva)->taux;
                     $baseTvaLigne = $ligneHt + $tsLigne;
-                    $tvaLigne = $baseTvaLigne * ($tauxTvaLigne / 100.0);
+                    $tvaLigne = round($baseTvaLigne * ($tauxTvaLigne / 100.0), 2);
                     $base_psvb_biens += ($baseTvaLigne + $tvaLigne);
                 }
             }
@@ -866,10 +926,12 @@ class FactureController extends Controller
             'elements' => $elements,
             'entete' => $entete,
             'total_ht' => $total_ht_brut,
+            'total_remise_lignes' => $total_remise_lignes,
             'remise_1' => $remise_1,
             'remise_2' => $remise_2,
             'remise_totale' => $remise_totale,
             'net_commercial' => $net_commercial,
+            'total_base_imposable_ht' => $total_base_imposable_ht,
             'tva_groups' => $tva_groups,
             'total_taxe' => $total_taxe,
             'total_ts' => $total_ts,
@@ -1077,6 +1139,8 @@ class FactureController extends Controller
         $designations = (array) $request->input('designation', []);
         $quantites    = (array) $request->input('quantite', []);
         $prix         = (array) $request->input('prix_unitaire', []);
+        $remiseVals   = (array) $request->input('remise_valeur', []);
+        $remiseTypes  = (array) $request->input('remise_type', []);
 
         $keptIds = [];
         $count = max(count($produits), count($quantites), count($prix));
@@ -1085,20 +1149,34 @@ class FactureController extends Controller
             $produitId = $produits[$i] ?? null;
             $quantite  = isset($quantites[$i]) ? (float) $quantites[$i] : 0;
             $prixU     = isset($prix[$i]) ? (float) $prix[$i] : 0;
+            $remVal    = isset($remiseVals[$i]) ? (float) $remiseVals[$i] : 0;
+            $remType   = isset($remiseTypes[$i]) ? strtoupper((string) $remiseTypes[$i]) : 'POURCENTAGE';
 
             if (!$produitId && $quantite == 0 && $prixU == 0) {
                 continue;
             }
 
-            $montant = $quantite * $prixU;
+            $brut = $quantite * $prixU;
+            $remMnt = 0.0;
+            if ($remVal > 0 && $brut > 0) {
+                if ($remType === 'MONTANT') {
+                    $remMnt = round(min($brut, $remVal), 2);
+                } else {
+                    $remMnt = round($brut * (min(100, $remVal) / 100.0), 2);
+                }
+            }
+            $montant = max(0, round($brut - $remMnt, 2));
 
             $data = [
-                'facture_id'    => $facture->id,
-                'produits_id'   => $produitId,
-                'designation'   => $designations[$i] ?? null,
-                'quantite'      => $quantite,
-                'prix_unitaire' => $prixU,
-                'montant_total' => $montant,
+                'facture_id'     => $facture->id,
+                'produits_id'    => $produitId,
+                'designation'    => $designations[$i] ?? null,
+                'quantite'       => $quantite,
+                'prix_unitaire'  => $prixU,
+                'remise_type'    => $remType,
+                'remise_valeur'  => $remVal,
+                'remise_montant' => $remMnt,
+                'montant_total'  => $montant,
             ];
 
             $existingId = $elementIds[$i] ?? null;

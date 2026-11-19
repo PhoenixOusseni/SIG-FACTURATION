@@ -258,6 +258,7 @@ class Facture extends Model
         }
 
         $totalHtBrut = 0.0;
+        $totalRemiseLignes = 0.0;
         $totalTs = 0.0;
         $lignesParGroupe = [];
 
@@ -266,6 +267,10 @@ class Facture extends Model
             $pu = (float) $el->prix_unitaire;
             $montantHt = $quantite * $pu;
             $totalHtBrut += $montantHt;
+
+            $remiseLigne = (float) ($el->calculated_remise ?? 0);
+            $totalRemiseLignes += $remiseLigne;
+            $ligneNetHt = max(0, $montantHt - $remiseLigne);
 
             $prod = $el->Produit;
             $tsUnit = 0.0;
@@ -276,33 +281,36 @@ class Facture extends Model
                     $tsUnit = (float) ($prod->montant_ts ?? 0);
                 }
             }
-            $tsLigne = $tsUnit * $quantite;
+            $tsLigne = round($tsUnit * $quantite, 2);
             $totalTs += $tsLigne;
 
             $groupe = strtoupper((string) optional(optional($prod)->tva)->code ?: 'A');
             $tauxTva = ($groupe === 'A') ? 0.0 : (float) optional(optional($prod)->tva)->taux;
 
             if (!isset($lignesParGroupe[$groupe])) {
-                $lignesParGroupe[$groupe] = ['taux' => $tauxTva, 'ht_brut' => 0.0, 'ts' => 0.0];
+                $lignesParGroupe[$groupe] = ['taux' => $tauxTva, 'ht_brut' => 0.0, 'ht_net' => 0.0, 'ts' => 0.0];
             }
             $lignesParGroupe[$groupe]['ht_brut'] += $montantHt;
-            $lignesParGroupe[$groupe]['ts'] += $tsLigne;
+            $lignesParGroupe[$groupe]['ht_net']  += $ligneNetHt;
+            $lignesParGroupe[$groupe]['ts']      += $tsLigne;
         }
 
+        $netApresRemiseLignes = max(0, $totalHtBrut - $totalRemiseLignes);
         $remise1 = (float) ($this->remise_1 ?? 0);
         $remise2 = (float) ($this->remise_2 ?? 0);
-        $remiseTotale = $remise1 + $remise2;
-        $netCommercial = max(0.0, $totalHtBrut - $remiseTotale);
-        $prorata = $totalHtBrut > 0 ? ($netCommercial / $totalHtBrut) : 1.0;
+        $remiseGlobale = $remise1 + $remise2;
+        $remiseTotale = $totalRemiseLignes + $remiseGlobale;
+        $netCommercial = max(0.0, round($totalHtBrut - $remiseTotale, 2));
+        $globalProrata = $netApresRemiseLignes > 0 ? (max(0, $netApresRemiseLignes - $remiseGlobale) / $netApresRemiseLignes) : 1.0;
 
         $totalTva = 0.0;
         foreach ($lignesParGroupe as $grp => $info) {
-            $baseHt = round($info['ht_brut'] * $prorata, 2);
+            $baseHt = round($info['ht_net'] * $globalProrata, 2);
             $baseTva = round($baseHt + $info['ts'], 2);
             $totalTva += round($baseTva * ($info['taux'] / 100.0), 2);
         }
 
-        $totalTtcBrut = $netCommercial + $totalTs + $totalTva;
+        $totalTtcBrut = round($netCommercial + $totalTs + $totalTva, 2);
 
         $tauxBic = (float) optional($this->Bic)->taux;
         $totalBic = 0.0;
@@ -313,17 +321,18 @@ class Facture extends Model
                 if ($prod && $prod->isBien()) {
                     $qte = (float) $el->quantite;
                     $pu = (float) $el->prix_unitaire;
-                    $ligneHt = $qte * $pu * $prorata;
+                    $remiseLigne = (float) ($el->calculated_remise ?? 0);
+                    $ligneHt = max(0, ($qte * $pu - $remiseLigne)) * $globalProrata;
                     $tsUnit = 0.0;
                     if ($prod->type_ts === 'POURCENTAGE' && (float) ($prod->pourcentage_ts ?? 0) > 0) {
                         $tsUnit = round($pu * ((float) $prod->pourcentage_ts / 100.0), 2);
                     } else {
                         $tsUnit = (float) ($prod->montant_ts ?? 0);
                     }
-                    $tsLigne = $tsUnit * $qte;
+                    $tsLigne = round($tsUnit * $qte, 2);
                     $tauxTvaLigne = (float) optional(optional($prod)->tva)->taux;
                     $baseTvaLigne = $ligneHt + $tsLigne;
-                    $tvaLigne = $baseTvaLigne * ($tauxTvaLigne / 100.0);
+                    $tvaLigne = round($baseTvaLigne * ($tauxTvaLigne / 100.0), 2);
                     $basePsvbBiens += ($baseTvaLigne + $tvaLigne);
                 }
             }
@@ -333,6 +342,27 @@ class Facture extends Model
         }
 
         return round($totalTtcBrut + $totalBic, 2);
+    }
+
+    /**
+     * Condition de règlement officielle (COMPTANT, CREDIT, ACOMPTE).
+     */
+    public function getConditionReglementAttribute(): string
+    {
+        if (!empty($this->notes) && str_starts_with(trim($this->notes), '{')) {
+            $notes = json_decode($this->notes, true) ?: [];
+            if (!empty($notes['condition_reglement'])) {
+                return strtoupper((string) $notes['condition_reglement']);
+            }
+        }
+
+        if ($this->montant_paye >= ($this->montant_total - 0.05)) {
+            return 'COMPTANT';
+        }
+        if ($this->montant_paye <= 0.05) {
+            return 'CREDIT';
+        }
+        return 'ACOMPTE';
     }
 
     /**
@@ -367,7 +397,8 @@ class Facture extends Model
 
         $ristourne = (float) ($this->ristourne ?? 0);
         $netApresAvoir = max(0.0, round($this->montant_total - $ristourne - $totalAvoir, 2));
-        return max(0.0, round($netApresAvoir - $this->montant_paye, 2));
+        $reste = max(0.0, round($netApresAvoir - $this->montant_paye, 2));
+        return ($reste <= 0.05) ? 0.0 : $reste;
     }
 
     /**
@@ -384,8 +415,10 @@ class Facture extends Model
             $totalAvoir += (float) $av->montant_total;
         }
 
-        $netApresAvoir = max(0.0, round($this->montant_total - (float) ($this->remise_1 ?? 0) - (float) ($this->remise_2 ?? 0) - (float) ($this->ristourne ?? 0) - $totalAvoir, 2));
-        return max(0.0, round($this->montant_paye - $netApresAvoir, 2));
+        $ristourne = (float) ($this->ristourne ?? 0);
+        $netApresAvoir = max(0.0, round($this->montant_total - $ristourne - $totalAvoir, 2));
+        $trop = max(0.0, round($this->montant_paye - $netApresAvoir, 2));
+        return ($trop <= 0.05) ? 0.0 : $trop;
     }
 
     /**

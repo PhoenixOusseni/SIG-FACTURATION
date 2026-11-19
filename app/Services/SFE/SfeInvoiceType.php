@@ -48,9 +48,9 @@ class SfeInvoiceType
         $code = self::normalize($appCode);
         $map = [
             'FV' => 'FV',
-            'FT' => 'FV', // acompte → vente MCF
+            'FT' => 'FT', // acompte / vente à terme MCF
             'EV' => 'EV',
-            'ET' => 'EV', // acompte export → export MCF
+            'ET' => 'ET', // acompte export MCF
             'FA' => 'FA',
             'EA' => 'EA',
         ];

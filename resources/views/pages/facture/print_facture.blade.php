@@ -742,12 +742,17 @@
                     <span class="font-mono fw-bold" style="color: #1e3a8a;">{{ implode(', ', $modesList) }}</span>
                 </div>
                 <div class="card-line" style="margin-top: 2px;">
-                    @if($facture->reste_a_payer <= 0.009)
+                    @php
+                        $condReg = $rawNotesPrint['condition_reglement'] ?? $facture->condition_reglement;
+                        $resteVal = (float) $facture->reste_a_payer;
+                        $payeVal = (float) $facture->montant_paye;
+                    @endphp
+                    @if($condReg === 'COMPTANT' || $resteVal <= 0.05)
                         <strong style="color: #15803d;">Règlement :</strong> <span style="color: #15803d; font-weight: 600;">100% Soldé au comptant</span>
-                    @elseif(($facture->montant_paye ?? 0) > 0.009)
-                        <strong style="color: #b45309;">Règlement :</strong> Acompte versé : {{ number_format($facture->montant_paye, 0, ',', ' ') }} FCFA &bull; <strong style="color: #b91c1c;">Reste dû : {{ number_format($facture->reste_a_payer, 0, ',', ' ') }} FCFA</strong>
+                    @elseif($condReg === 'CREDIT' || $payeVal <= 0.05)
+                        <strong style="color: #b91c1c;">Règlement :</strong> <span style="color: #b91c1c; font-weight: 600;">0 FCFA réglé &bull; Reste à payer : {{ number_format($resteVal, 0, ',', ' ') }} FCFA (Vente à crédit / à terme)</span>
                     @else
-                        <strong style="color: #b91c1c;">Règlement :</strong> <span style="color: #b91c1c; font-weight: 600;">0 FCFA réglé &bull; Reste à payer : {{ number_format($facture->reste_a_payer, 0, ',', ' ') }} FCFA (Vente à crédit / à terme)</span>
+                        <strong style="color: #b45309;">Règlement :</strong> Acompte versé : {{ number_format($payeVal, 0, ',', ' ') }} FCFA &bull; <strong style="color: #b91c1c;">Reste dû : {{ number_format($resteVal, 0, ',', ' ') }} FCFA</strong>
                     @endif
                 </div>
                 <div class="card-line"><strong>Opérateur :</strong> {{ optional($facture->User)->prenom }} {{ optional($facture->User)->nom ?? 'Système' }}</div>
@@ -776,16 +781,31 @@
             </div>
         </div>
 
+        @php
+            $formatMonnaie = function($val) {
+                $val = (float) $val;
+                $hasDecimals = abs($val - round($val)) > 0.001;
+                return number_format($val, $hasDecimals ? 2 : 0, ',', ' ');
+            };
+            $formatQte = function($qte) {
+                $qte = (float) $qte;
+                if ($qte == (int)$qte) {
+                    return number_format($qte, 0, ',', ' ');
+                }
+                return rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',');
+            };
+        @endphp
+
         <!-- 3. Tableau des Articles -->
         <table class="invoice-items">
             <thead>
                 <tr>
                     <th style="width: 4%;" class="text-center">#</th>
-                    <th style="width: 50%;">Article / Prestation</th>
+                    <th style="width: 48%;">Article / Prestation</th>
                     <th class="text-center" style="width: 8%;">Qté</th>
                     <th class="text-end" style="width: 13%;">P.U. {{ $isHtMode ? 'HT' : 'TTC' }}</th>
                     <th class="text-end" style="width: 8%;">T.S.</th>
-                    <th class="text-end" style="width: 7%;">Remise</th>
+                    <th class="text-end" style="width: 9%;">Remise</th>
                     <th class="text-end" style="width: 10%;">Total {{ $isHtMode ? 'HT' : 'TTC' }}</th>
                 </tr>
             </thead>
@@ -798,6 +818,8 @@
                         $qte = (float) $el->quantite;
                         $pu  = (float) $el->prix_unitaire;
                         $ligneBrut = $qte * $pu;
+                        $remiseLigne = (float) ($el->calculated_remise ?? 0);
+                        $ligneNet = max(0, $ligneBrut - $remiseLigne);
                         $tauxTva = (float) optional(optional($el->Produit)->tva)->taux ?? 0;
                         $grpTva = strtoupper(optional(optional($el->Produit)->tva)->code ?: ($tauxTva > 0 ? 'B' : 'A'));
                         $prod = $el->Produit;
@@ -809,6 +831,9 @@
                                 $tsUnit = (float) ($prod->montant_ts ?? 0);
                             }
                         }
+                        $tsLigne = round($tsUnit * $qte, 2);
+                        // Base imposable légale HT de la ligne DGI (Net HT + TS)
+                        $totalLigneHt = round($ligneNet + $tsLigne, 2);
                         $labelFiscal = $prod ? $prod->label_fiscal : ($el->designation ?? optional($el->Produit)->designation ?? 'Article');
                     @endphp
                     <tr>
@@ -816,14 +841,20 @@
                         <td>
                             <div class="fw-bold">{{ $labelFiscal }}</div>
                             @if($tsUnit > 0)
-                                <div style="font-size: 10px; color: #475569; margin-top: 2px;">(dont Taxe Spécifique : {{ number_format($tsUnit, 2, ',', ' ') }} FCFA/u)</div>
+                                <div style="font-size: 10px; color: #475569; margin-top: 2px;">(dont Taxe Spécifique : {{ $formatMonnaie($tsUnit) }} FCFA/u)</div>
                             @endif
                         </td>
-                        <td class="text-center fw-bold">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
-                        <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
-                        <td class="text-end font-mono text-muted">{{ $tsUnit > 0 ? number_format($tsUnit * $qte, 0, ',', ' ') : '-' }}</td>
-                        <td class="text-end font-mono text-danger">-</td>
-                        <td class="text-end font-mono fw-bold">{{ number_format($ligneBrut, 0, ',', ' ') }}</td>
+                        <td class="text-center fw-bold">{{ $formatQte($qte) }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($pu) }}</td>
+                        <td class="text-end font-mono text-muted">{{ $tsLigne > 0 ? $formatMonnaie($tsLigne) : '-' }}</td>
+                        <td class="text-end font-mono">
+                            @if($remiseLigne > 0)
+                                <span class="text-danger">- {{ $formatMonnaie($remiseLigne) }}</span>
+                            @else
+                                <span class="text-muted">-</span>
+                            @endif
+                        </td>
+                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($totalLigneHt) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -846,16 +877,16 @@
                         @foreach($tva_groups as $grp => $info)
                         <tr>
                             <td class="fw-bold">Groupe [{{ $grp }}]</td>
-                            <td class="text-end font-mono">{{ number_format($info['base'], 0, ',', ' ') }}</td>
+                            <td class="text-end font-mono">{{ $formatMonnaie($info['base']) }}</td>
                             <td class="text-center">{{ $info['taux'] > 0 ? $info['taux'].'%' : '0%' }}</td>
-                            <td class="text-end font-mono fw-bold">{{ number_format($info['taxe'], 0, ',', ' ') }}</td>
+                            <td class="text-end font-mono fw-bold">{{ $formatMonnaie($info['taxe']) }}</td>
                         </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
                         <tr>
                             <td colspan="3" class="text-end">TOTAL TVA :</td>
-                            <td class="text-end font-mono fw-bold">{{ number_format($total_taxe, 0, ',', ' ') }}</td>
+                            <td class="text-end font-mono fw-bold">{{ $formatMonnaie($total_taxe) }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -866,47 +897,47 @@
                 <table class="finance-table">
                     <tr>
                         <td>Total Brut HT</td>
-                        <td class="text-end font-mono">{{ number_format($total_ht, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($total_ht) }}</td>
                     </tr>
                     @if($remise_totale > 0)
                     <tr>
-                        <td class="text-danger">Remise commerciale</td>
-                        <td class="text-end font-mono text-danger">- {{ number_format($remise_totale, 0, ',', ' ') }}</td>
+                        <td class="text-danger">Remises commerciales</td>
+                        <td class="text-end font-mono text-danger">- {{ $formatMonnaie($remise_totale) }}</td>
+                    </tr>
+                    @endif
+                    @if($total_ts > 0)
+                    <tr>
+                        <td>Taxes spécifiques (TS)</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($total_ts) }}</td>
                     </tr>
                     @endif
                     <tr class="highlight-row">
-                        <td>Total Net HT</td>
-                        <td class="text-end font-mono fw-bold">{{ number_format($net_commercial, 0, ',', ' ') }}</td>
+                        <td>Total Base Imposable HT</td>
+                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($total_base_imposable_ht ?? ($net_commercial + $total_ts)) }}</td>
                     </tr>
                     <tr>
                         <td>Total TVA</td>
-                        <td class="text-end font-mono">{{ number_format($total_taxe, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($total_taxe) }}</td>
                     </tr>
-                    @if($total_ts > 0)
-                    <tr>
-                        <td>Taxes spécifiques</td>
-                        <td class="text-end font-mono">{{ number_format($total_ts, 0, ',', ' ') }}</td>
-                    </tr>
-                    @endif
                     @if($total_bic > 0)
                     <tr>
                         <td>Acompte BIC / PSVB</td>
-                        <td class="text-end font-mono text-warning">{{ number_format($total_bic, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono text-warning">{{ $formatMonnaie($total_bic) }}</td>
                     </tr>
                     @endif
                     @if($montant_transport > 0)
                     <tr>
                         <td>{{ $transport_label }}</td>
-                        <td class="text-end font-mono">{{ number_format($montant_transport, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($montant_transport) }}</td>
                     </tr>
                     @endif
                     <tr class="grand-total-row">
                         <td>{{ $isAvoir ? 'NET À DÉDUIRE' : 'NET À PAYER' }}</td>
-                        <td class="text-end font-mono">{{ number_format($net_a_payer, 0, ',', ' ') }} FCFA</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($net_a_payer) }} FCFA</td>
                     </tr>
                     <tr>
                         <td colspan="2" class="text-muted" style="font-size: 8px; border-top: 1px dashed #cbd5e1; padding-top: 3px; font-style: italic;">
-                            Montant timbre quittance en cas de paiement en espèces : {{ number_format($total_timbre ?? 0, 0, ',', ' ') }} FCFA
+                            Montant timbre quittance en cas de paiement en espèces : {{ $formatMonnaie($total_timbre ?? 0) }} FCFA
                         </td>
                     </tr>
                 </table>

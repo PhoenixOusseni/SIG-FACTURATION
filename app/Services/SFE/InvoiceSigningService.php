@@ -490,20 +490,32 @@ class InvoiceSigningService
 
     protected function buildSaleLines(Facture $facture): array
     {
+        $totalRemiseLignes = $facture->ElementFactures->sum(function ($line) {
+            return (float) ($line->calculated_remise ?? 0);
+        });
         $grossHt = $facture->ElementFactures->sum(function ($line) {
             return (float) $line->quantite * (float) $line->prix_unitaire;
         });
-        $discount = (float) $facture->remise_1 + (float) $facture->remise_2;
-        $discountFactor = $grossHt > 0 ? max(0, $grossHt - $discount) / $grossHt : 1;
+        $netApresRemiseLignes = max(0, $grossHt - $totalRemiseLignes);
+        $globalDiscount = (float) $facture->remise_1 + (float) $facture->remise_2;
+        $globalDiscountFactor = ($globalDiscount > 0 && $netApresRemiseLignes > 0)
+            ? max(0, $netApresRemiseLignes - $globalDiscount) / $netApresRemiseLignes
+            : 1.0;
 
-        return $facture->ElementFactures->map(function ($line) use ($discountFactor) {
+        return $facture->ElementFactures->map(function ($line) use ($globalDiscountFactor) {
             $product = $line->Produit;
             $tax = optional($product)->tva;
             $group = strtoupper(optional($tax)->code ?: 'A');
             $rate = in_array($group, ['A', 'D', 'E'], true) ? 0.0 : (float) optional($tax)->taux;
-            $unitHtAfterDiscount = (float) $line->prix_unitaire * $discountFactor;
-            $unitTtc = round($unitHtAfterDiscount * (1 + $rate / 100), 2);
             $qty = (float) $line->quantite;
+
+            $remiseLigne = (float) ($line->calculated_remise ?? 0);
+            $grossLineHt = $qty * (float) $line->prix_unitaire;
+            $netLineHt = max(0, $grossLineHt - $remiseLigne);
+            $unitHtAfterLineDiscount = $qty > 0 ? ($netLineHt / $qty) : (float) $line->prix_unitaire;
+
+            $unitHtFinal = ($globalDiscountFactor != 1.0) ? ($unitHtAfterLineDiscount * $globalDiscountFactor) : $unitHtAfterLineDiscount;
+            $unitTtc = round($unitHtFinal * (1 + $rate / 100), 2);
             if ($qty <= 0 || $unitTtc < 0) {
                 throw new BridgeException('Ligne invalide : quantité et montant doivent être positifs (FEC 1.22).');
             }
@@ -531,25 +543,37 @@ class InvoiceSigningService
 
     protected function buildAvoirLines(FactureAvoir $avoir): array
     {
+        $totalRemiseLignes = $avoir->ElementFactureAvoirs->sum(function ($line) {
+            return (float) ($line->calculated_remise ?? 0);
+        });
         $grossHt = $avoir->ElementFactureAvoirs->sum(function ($line) {
             return (float) $line->quantite * (float) $line->prix_unitaire;
         });
-        $discount = (float) ($avoir->remise_1 ?? 0) + (float) ($avoir->remise_2 ?? 0);
-        $discountFactor = $grossHt > 0 ? max(0, $grossHt - $discount) / $grossHt : 1;
+        $netApresRemiseLignes = max(0, $grossHt - $totalRemiseLignes);
+        $globalDiscount = (float) ($avoir->remise_1 ?? 0) + (float) ($avoir->remise_2 ?? 0);
+        $globalDiscountFactor = ($globalDiscount > 0 && $netApresRemiseLignes > 0)
+            ? max(0, $netApresRemiseLignes - $globalDiscount) / $netApresRemiseLignes
+            : 1.0;
 
         $rawNotes = (!empty($avoir->notes) && str_starts_with(trim($avoir->notes), '{'))
             ? (json_decode($avoir->notes, true) ?: [])
             : [];
         $rrrDesignation = $rawNotes['rrr_designation'] ?? null;
 
-        return $avoir->ElementFactureAvoirs->map(function ($line) use ($discountFactor, $avoir, $rrrDesignation) {
+        return $avoir->ElementFactureAvoirs->map(function ($line) use ($globalDiscountFactor, $avoir, $rrrDesignation) {
             $product = $line->Produit;
             $tax = optional($product)->tva;
             $group = strtoupper(optional($tax)->code ?: 'A');
             $rate = in_array($group, ['A', 'D', 'E'], true) ? 0.0 : (float) optional($tax)->taux;
-            $unitHtAfterDiscount = (float) $line->prix_unitaire * $discountFactor;
-            $unitTtc = round($unitHtAfterDiscount * (1 + $rate / 100), 2);
             $qty = (float) $line->quantite;
+
+            $remiseLigne = (float) ($line->calculated_remise ?? 0);
+            $grossLineHt = $qty * (float) $line->prix_unitaire;
+            $netLineHt = max(0, $grossLineHt - $remiseLigne);
+            $unitHtAfterLineDiscount = $qty > 0 ? ($netLineHt / $qty) : (float) $line->prix_unitaire;
+
+            $unitHtFinal = ($globalDiscountFactor != 1.0) ? ($unitHtAfterLineDiscount * $globalDiscountFactor) : $unitHtAfterLineDiscount;
+            $unitTtc = round($unitHtFinal * (1 + $rate / 100), 2);
             if ($qty <= 0 || $unitTtc < 0) {
                 throw new BridgeException('Ligne d\'avoir invalide : quantité et montant doivent être positifs (FEC 1.22).');
             }

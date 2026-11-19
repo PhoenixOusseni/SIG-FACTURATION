@@ -167,6 +167,77 @@
             color: #0f172a !important;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
         }
+
+        /* ── Tableau des Lignes d'Articles & Saisie Remise Ergonomique ── */
+        #elementsTable {
+            width: 100% !important;
+            min-width: 920px !important;
+        }
+        #elementsTable th.col-index, #elementsTable td.col-index {
+            width: 38px !important;
+            min-width: 38px !important;
+            max-width: 38px !important;
+            text-align: center;
+        }
+        #elementsTable th.col-article, #elementsTable td.col-article {
+            min-width: 270px !important;
+        }
+        #elementsTable th.col-price, #elementsTable td.col-price {
+            width: 135px !important;
+            min-width: 135px !important;
+        }
+        #elementsTable th.col-qty, #elementsTable td.col-qty {
+            width: 95px !important;
+            min-width: 95px !important;
+        }
+        #elementsTable th.col-remise, #elementsTable td.col-remise {
+            width: 185px !important;
+            min-width: 185px !important;
+            max-width: 195px !important;
+        }
+        #elementsTable th.col-total, #elementsTable td.col-total {
+            width: 135px !important;
+            min-width: 135px !important;
+        }
+        #elementsTable th.col-action, #elementsTable td.col-action {
+            width: 45px !important;
+            min-width: 45px !important;
+            max-width: 45px !important;
+            text-align: center;
+        }
+
+        .remise-input-group {
+            display: flex !important;
+            width: 100% !important;
+            min-width: 170px !important;
+        }
+        .remise-val-input {
+            flex: 1 1 auto !important;
+            min-width: 80px !important;
+            padding: 0.25rem 0.4rem !important;
+            font-size: 0.85rem !important;
+            text-align: right !important;
+        }
+        .remise-val-input::-webkit-outer-spin-button,
+        .remise-val-input::-webkit-inner-spin-button {
+            -webkit-appearance: none !important;
+            margin: 0 !important;
+        }
+        .remise-val-input {
+            -moz-appearance: textfield !important;
+        }
+        .remise-type-select {
+            flex: 0 0 68px !important;
+            width: 68px !important;
+            min-width: 68px !important;
+            max-width: 68px !important;
+            padding: 0.25rem 0.35rem !important;
+            font-size: 0.78rem !important;
+            font-weight: 700 !important;
+            background-color: #f1f5f9 !important;
+            border-left: none !important;
+            cursor: pointer !important;
+        }
     </style>
 @endsection
 
@@ -892,19 +963,19 @@
 
                                         <div class="col-lg-4 col-md-6">
                                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                                <label class="form-label fw-semibold mb-0">Remise Commerciale</label>
+                                                <label class="form-label fw-semibold mb-0">Remise Commerciale Globale</label>
                                                 <div class="btn-group btn-group-sm" role="group">
-                                                    <input type="radio" class="btn-check" name="remise_type" id="remiseTypePct" value="POURCENTAGE" checked onchange="changerTypeRemise('POURCENTAGE')">
+                                                    <input type="radio" class="btn-check" name="global_remise_type" id="remiseTypePct" value="POURCENTAGE" checked onchange="changerTypeRemise('POURCENTAGE')">
                                                     <label class="btn btn-outline-secondary py-0 px-2 font-monospace" for="remiseTypePct" style="font-size: 0.72rem;">% (Taux)</label>
 
-                                                    <input type="radio" class="btn-check" name="remise_type" id="remiseTypeMnt" value="MONTANT" onchange="changerTypeRemise('MONTANT')">
+                                                    <input type="radio" class="btn-check" name="global_remise_type" id="remiseTypeMnt" value="MONTANT" onchange="changerTypeRemise('MONTANT')">
                                                     <label class="btn btn-outline-secondary py-0 px-2 font-monospace" for="remiseTypeMnt" style="font-size: 0.72rem;">FCFA (Fixe)</label>
                                                 </div>
                                             </div>
                                             <div class="input-group">
-                                                <input type="number" step="0.01" min="0" name="remise_valeur" id="facture_remise_valeur" class="form-control font-monospace" value="{{ old('remise_valeur', 0) }}" placeholder="0" oninput="calculerSyntheseLive()">
+                                                <input type="number" step="0.01" min="0" name="global_remise_valeur" id="facture_remise_valeur" class="form-control font-monospace" value="0" placeholder="0" oninput="calculerSyntheseLive()">
                                                 <span class="input-group-text bg-white fw-bold" id="remiseUnitLabel">%</span>
-                                                <input type="hidden" name="remise_1" id="facture_remise_1" value="{{ old('remise_1', 0) }}">
+                                                <input type="hidden" name="remise_1" id="facture_remise_1" value="0">
                                             </div>
                                         </div>
                                     </div>
@@ -945,20 +1016,21 @@
                                         <table class="table table-hover align-middle mb-0" id="elementsTable">
                                             <thead class="table-light">
                                                 <tr>
-                                                    <th style="width: 45px;" class="text-center">#</th>
-                                                    <th style="min-width: 380px;">Article / Prestation</th>
-                                                    <th style="width: 150px;" class="text-end" id="colPriceHeader">P.U. HT (FCFA)</th>
-                                                    <th style="width: 110px;" class="text-center">Quantité</th>
-                                                    <th style="width: 160px;" class="text-end" id="colTotalLineHeader">Total Ligne HT</th>
-                                                    <th style="width: 50px;"></th>
+                                                    <th class="text-center col-index">#</th>
+                                                    <th class="col-article">Article / Prestation</th>
+                                                    <th class="text-end col-price" id="colPriceHeader">P.U. HT (FCFA)</th>
+                                                    <th class="text-center col-qty">Quantité</th>
+                                                    <th class="text-center col-remise">Remise</th>
+                                                    <th class="text-end col-total" id="colTotalLineHeader">Total Ligne HT</th>
+                                                    <th class="col-action"></th>
                                                 </tr>
                                             </thead>
                                             <tbody id="elementsContainer">
                                                 @if (old('produits_id') && is_array(old('produits_id')))
                                                     @foreach (old('produits_id') as $idx => $oldProdId)
                                                         <tr class="element-row">
-                                                            <td class="text-center fw-bold text-muted row-index">{{ $idx + 1 }}</td>
-                                                            <td>
+                                                            <td class="text-center fw-bold text-muted row-index col-index">{{ $idx + 1 }}</td>
+                                                            <td class="col-article">
                                                                 <select name="produits_id[]" class="form-select base-taxable-select" required>
                                                                     <option value="">Sélectionner un produit...</option>
                                                                     @foreach ($produits as $prod)
@@ -968,16 +1040,25 @@
                                                                     @endforeach
                                                                 </select>
                                                             </td>
-                                                            <td>
+                                                            <td class="col-price">
                                                                 <input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" value="{{ old('prix_unitaire.' . $idx) }}" required>
                                                             </td>
-                                                            <td>
+                                                            <td class="col-qty">
                                                                 <input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="{{ old('quantite.' . $idx, 1) }}" required>
                                                             </td>
-                                                            <td class="text-end">
-                                                                <span class="montant-cell fw-bold font-monospace text-primary fs-6">0 FCFA</span>
+                                                            <td class="col-remise">
+                                                                <div class="input-group input-group-sm remise-input-group">
+                                                                    <input type="number" step="0.01" min="0" name="remise_valeur[]" class="form-control remise-val-input text-end font-monospace" value="{{ old('remise_valeur.' . $idx, 0) }}" placeholder="0">
+                                                                    <select name="remise_type[]" class="form-select remise-type-select">
+                                                                        <option value="POURCENTAGE" {{ old('remise_type.' . $idx) === 'MONTANT' ? '' : 'selected' }}>%</option>
+                                                                        <option value="MONTANT" {{ old('remise_type.' . $idx) === 'MONTANT' ? 'selected' : '' }}>FCFA</option>
+                                                                    </select>
+                                                                </div>
                                                             </td>
-                                                            <td class="text-center">
+                                                            <td class="text-end col-total">
+                                                                <span class="montant-cell fw-bold font-monospace text-primary fs-6">0,00</span>
+                                                            </td>
+                                                            <td class="text-center col-action">
                                                                 <button type="button" class="btn btn-outline-danger btn-sm removeRowBtn">
                                                                     <i class="fas fa-trash-alt"></i>
                                                                 </button>
@@ -986,8 +1067,8 @@
                                                     @endforeach
                                                 @else
                                                     <tr class="element-row">
-                                                        <td class="text-center fw-bold text-muted row-index">1</td>
-                                                        <td>
+                                                        <td class="text-center fw-bold text-muted row-index col-index">1</td>
+                                                        <td class="col-article">
                                                             <select name="produits_id[]" class="form-select base-taxable-select" required>
                                                                 <option value="">Sélectionner un produit...</option>
                                                                 @foreach ($produits as $prod)
@@ -997,16 +1078,25 @@
                                                                 @endforeach
                                                             </select>
                                                         </td>
-                                                        <td>
+                                                        <td class="col-price">
                                                             <input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" placeholder="0" required>
                                                         </td>
-                                                        <td>
+                                                        <td class="col-qty">
                                                             <input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="1" required>
                                                         </td>
-                                                        <td class="text-end">
-                                                            <span class="montant-cell fw-bold font-monospace text-primary fs-6">0 FCFA</span>
+                                                        <td class="col-remise">
+                                                            <div class="input-group input-group-sm remise-input-group">
+                                                                <input type="number" step="0.01" min="0" name="remise_valeur[]" class="form-control remise-val-input text-end font-monospace" value="0" placeholder="0">
+                                                                <select name="remise_type[]" class="form-select remise-type-select">
+                                                                    <option value="POURCENTAGE" selected>%</option>
+                                                                    <option value="MONTANT">FCFA</option>
+                                                                </select>
+                                                            </div>
                                                         </td>
-                                                        <td class="text-center">
+                                                        <td class="text-end col-total">
+                                                            <span class="montant-cell fw-bold font-monospace text-primary fs-6">0,00</span>
+                                                        </td>
+                                                        <td class="text-center col-action">
                                                             <button type="button" class="btn btn-outline-danger btn-sm removeRowBtn">
                                                                 <i class="fas fa-trash-alt"></i>
                                                             </button>
@@ -1066,7 +1156,7 @@
                                                         </select>
                                                     </td>
                                                     <td>
-                                                        <input type="number" step="1" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold text-end reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()" required>
+                                                        <input type="number" step="0.01" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold text-end reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()" required>
                                                     </td>
                                                     <td>
                                                         <input type="text" name="reglement_reference[]" class="form-control form-control-sm" placeholder="Ex: N° Chèque, Réf Virement, Transaction Mobile...">
@@ -1114,7 +1204,7 @@
                                         <div id="boxNoticeAcompte" class="row g-2 mt-1" style="display: none;">
                                             <div class="col-md-5">
                                                 <label class="form-label small fw-bold text-primary mb-1">Montant Acompte Réglé sur-le-champ (FCFA)</label>
-                                                <input type="number" step="1" min="1" name="acompte_montant" id="acompte_montant" class="form-control form-control-sm font-monospace fw-bold" placeholder="Montant acompte..." oninput="calculerSyntheseLive()">
+                                                <input type="number" step="0.01" min="0.01" name="acompte_montant" id="acompte_montant" class="form-control form-control-sm font-monospace fw-bold" placeholder="Montant acompte..." oninput="calculerSyntheseLive()">
                                             </div>
                                             <div class="col-md-4">
                                                 <label class="form-label small fw-bold mb-1">Moyen d'encaissement de l'acompte</label>
@@ -2105,7 +2195,7 @@
 @endsection
 
 @section('script')
-    <script src="{{ asset('js/invoice-lines.js') }}"></script>
+    <script src="{{ asset('js/invoice-lines.js') }}?v={{ file_exists(public_path('js/invoice-lines.js')) ? filemtime(public_path('js/invoice-lines.js')) : time() }}"></script>
     <script>
         const productsCatalog = @json($produitsData);
 
@@ -2883,6 +2973,47 @@
         let currentConditionReglement = 'COMPTANT';
         let currentNetAPayer = 0;
 
+        // Helpers calcul unitaire fiscal déterministe (sans dérive HT <-> TTC avec TS et TVA)
+        function formatNumberLive(n) {
+            const v = parseFloat(n) || 0;
+            const hasDec = Math.abs(v % 1) > 0.001;
+            return v.toLocaleString('fr-FR', {
+                minimumFractionDigits: hasDec ? 2 : 0,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function calculerPuTtc(puHt, prodInfo) {
+            const tauxTva = parseFloat(prodInfo.taux_tva) || 0;
+            let tsUnit = 0;
+            if (prodInfo.type_ts === 'MONTANT') {
+                tsUnit = parseFloat(prodInfo.montant_ts) || 0;
+            } else if (prodInfo.type_ts === 'POURCENTAGE') {
+                tsUnit = puHt * ((parseFloat(prodInfo.pourcentage_ts) || 0) / 100);
+            }
+            const baseTva = puHt + tsUnit;
+            return Math.round((baseTva * (1 + tauxTva / 100)) * 100) / 100;
+        }
+
+        function calculerPuHt(puTtc, prodInfo) {
+            const tauxTva = parseFloat(prodInfo.taux_tva) || 0;
+            const divTva = 1 + (tauxTva / 100);
+            if (divTva <= 0) return puTtc;
+
+            if (prodInfo.type_ts === 'MONTANT') {
+                const mntTs = parseFloat(prodInfo.montant_ts) || 0;
+                // Formule fiscale exacte DGI SECeF : TTC = (HT + TS) * (1 + TVA) => HT = (TTC / (1 + TVA)) - TS
+                return Math.max(0, Math.round(((puTtc / divTva) - mntTs) * 100) / 100);
+            } else if (prodInfo.type_ts === 'POURCENTAGE') {
+                const pctTs = (parseFloat(prodInfo.pourcentage_ts) || 0) / 100;
+                // TTC = HT * (1 + TS_pct) * (1 + TVA) => HT = TTC / ((1 + TS_pct) * (1 + TVA))
+                const divTotal = (1 + pctTs) * divTva;
+                return Math.max(0, Math.round((puTtc / divTotal) * 100) / 100);
+            } else {
+                return Math.max(0, Math.round((puTtc / divTva) * 100) / 100);
+            }
+        }
+
         // Basculer entre Saisie HT et Saisie TTC avec conversion dynamique et déterministe (sans dérive)
         function changerModePrix(mode) {
             if (currentModePrix === mode) return;
@@ -2904,27 +3035,16 @@
                 if (!prodId) return;
 
                 const prodInfo = productsCatalog[String(prodId)] || {};
-                const tauxTva = parseFloat(prodInfo.taux_tva) || 0;
-                let tsUnit = 0;
-                if (prodInfo.type_ts === 'MONTANT') tsUnit = parseFloat(prodInfo.montant_ts) || 0;
-                else if (prodInfo.type_ts === 'POURCENTAGE') {
-                    const base = parseFloat(prodInfo.prix_unitaire) || 0;
-                    tsUnit = base * ((parseFloat(prodInfo.pourcentage_ts) || 0) / 100);
-                }
 
                 let puHt = $(this).data('pu-ht');
                 if (puHt === undefined || isNaN(puHt) || puHt <= 0) {
-                    puHt = parseFloat(prodInfo.prix_unitaire) || parseFloat($puInput.val()) || 0;
-                    $(this).data('pu-ht', puHt);
+                    const currentVal = parseFloat($puInput.val()) || 0;
+                    puHt = (mode === 'TTC') ? currentVal : calculerPuHt(currentVal, prodInfo);
+                    $(this).data('pu-ht', puHt).attr('data-pu-ht', puHt);
                 }
 
-                let puTtc = $(this).data('pu-ttc');
-                if (puTtc === undefined || isNaN(puTtc) || puTtc <= 0) {
-                    puTtc = prodInfo.prix_unitaire_ttc !== undefined
-                        ? parseFloat(prodInfo.prix_unitaire_ttc)
-                        : Math.round(((puHt + tsUnit) * (1 + tauxTva / 100)) * 100) / 100;
-                    $(this).data('pu-ttc', puTtc);
-                }
+                const puTtc = calculerPuTtc(puHt, prodInfo);
+                $(this).data('pu-ttc', puTtc).attr('data-pu-ttc', puTtc);
 
                 if (mode === 'TTC') {
                     $puInput.val(puTtc);
@@ -2955,6 +3075,9 @@
                 $('#boxNoticeComptant').show();
                 $('#boxNoticeCredit').hide();
                 $('#boxNoticeAcompte').hide();
+                if ($('.paiement-row').length === 1 && currentNetAPayer > 0) {
+                    $('#paiementsContainer tr.paiement-row:first .reglement-montant-input').val(currentNetAPayer.toFixed(2));
+                }
             } else if (cond === 'CREDIT') {
                 $('#boxNoticeComptant').hide();
                 $('#boxNoticeCredit').show();
@@ -3014,22 +3137,31 @@
                             const tot = Math.round(pu * qte);
                             const rowHtml = `
                                 <tr class="element-row">
-                                    <td class="text-center fw-bold text-muted row-index">${idx + 1}</td>
-                                    <td>
+                                    <td class="text-center fw-bold text-muted row-index col-index">${idx + 1}</td>
+                                    <td class="col-article">
                                         <select name="produits_id[]" class="form-select base-taxable-select" required>
                                             ${InvoiceLines.buildOptionsHtml(item.produit_id)}
                                         </select>
                                     </td>
-                                    <td>
+                                    <td class="col-price">
                                         <input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" value="${pu}" required>
                                     </td>
-                                    <td>
+                                    <td class="col-qty">
                                         <input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="${qte}" required>
                                     </td>
-                                    <td class="text-end">
-                                        <span class="montant-cell fw-bold font-monospace text-primary fs-6">${tot.toLocaleString('fr-FR')} FCFA</span>
+                                    <td class="col-remise">
+                                        <div class="input-group input-group-sm remise-input-group">
+                                            <input type="number" step="0.01" min="0" name="remise_valeur[]" class="form-control remise-val-input text-end font-monospace" value="0" placeholder="0">
+                                            <select name="remise_type[]" class="form-select remise-type-select">
+                                                <option value="POURCENTAGE" selected>%</option>
+                                                <option value="MONTANT">FCFA</option>
+                                            </select>
+                                        </div>
                                     </td>
-                                    <td class="text-center">
+                                    <td class="text-end col-total">
+                                        <span class="montant-cell fw-bold font-monospace text-primary fs-6">${formatNumberLive(tot)}</span>
+                                    </td>
+                                    <td class="text-center col-action">
                                         <button type="button" class="btn btn-outline-danger btn-sm removeRowBtn">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
@@ -3088,16 +3220,25 @@
             } else if ($rows.length === 0) {
                 $('#elementsContainer').html(`
                     <tr class="element-row">
-                        <td class="text-center fw-bold text-muted row-index">1</td>
-                        <td>
+                        <td class="text-center fw-bold text-muted row-index col-index">1</td>
+                        <td class="col-article">
                             <select name="produits_id[]" class="form-select base-taxable-select" required>
                                 ${typeof InvoiceLines !== 'undefined' ? InvoiceLines.buildOptionsHtml() : ''}
                             </select>
                         </td>
-                        <td><input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" placeholder="0" required></td>
-                        <td><input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="1" required></td>
-                        <td class="text-end"><span class="montant-cell fw-bold font-monospace text-primary fs-6">0 FCFA</span></td>
-                        <td class="text-center">
+                        <td class="col-price"><input type="number" step="0.01" min="0.01" name="prix_unitaire[]" class="form-control prix-input text-end font-monospace" placeholder="0" required></td>
+                        <td class="col-qty"><input type="number" step="0.001" min="0.001" name="quantite[]" class="form-control qte-input text-center font-monospace" value="1" required></td>
+                        <td class="col-remise">
+                            <div class="input-group input-group-sm remise-input-group">
+                                <input type="number" step="0.01" min="0" name="remise_valeur[]" class="form-control remise-val-input text-end font-monospace" value="0" placeholder="0">
+                                <select name="remise_type[]" class="form-select remise-type-select">
+                                    <option value="POURCENTAGE" selected>%</option>
+                                    <option value="MONTANT">FCFA</option>
+                                </select>
+                            </div>
+                        </td>
+                        <td class="text-end col-total"><span class="montant-cell fw-bold font-monospace text-primary fs-6">0,00</span></td>
+                        <td class="text-center col-action">
                             <button type="button" class="btn btn-outline-danger btn-sm removeRowBtn"><i class="fas fa-trash-alt"></i></button>
                         </td>
                     </tr>
@@ -3107,7 +3248,8 @@
             const $firstRow = $('#elementsContainer .element-row:first');
             $firstRow.find('.prix-input').val('');
             $firstRow.find('.qte-input').val('1');
-            $firstRow.find('.montant-cell').text('0 FCFA');
+            $firstRow.find('.remise-val-input').val('0');
+            $firstRow.find('.montant-cell').text('0,00');
             const $prodSelect = $firstRow.find('.base-taxable-select');
             if ($.fn.select2 && $prodSelect.hasClass('select2-hidden-accessible')) {
                 $prodSelect.val('').trigger('change.select2');
@@ -3147,7 +3289,7 @@
                         </select>
                     </td>
                     <td>
-                        <input type="number" step="1" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold text-end reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()" required>
+                        <input type="number" step="0.01" min="0" name="reglement_montant[]" class="form-control form-control-sm font-monospace fw-bold text-end reglement-montant-input" placeholder="0" oninput="calculerSyntheseLive()" required>
                     </td>
                     <td>
                         <input type="text" name="reglement_reference[]" class="form-control form-control-sm" placeholder="Ex: N° Chèque, Réf Virement, Transaction...">
@@ -3194,7 +3336,9 @@
             $('.reglement-montant-input').each(function() {
                 totalModes += parseFloat($(this).val()) || 0;
             });
-            const modesMatch = ($('.paiement-row').length === 1) || (Math.abs(Math.round(totalModes) - currentNetAPayer) <= 1);
+            const modesVal = Math.round(totalModes * 100) / 100;
+            const netVal = Math.round(currentNetAPayer * 100) / 100;
+            const modesMatch = ($('.paiement-row').length === 1) || (Math.abs(modesVal - netVal) <= 0.50);
 
             const formValid = hasClient && hasType && hasMode && hasValidLine && modesMatch;
 
@@ -3230,15 +3374,24 @@
             }
         }
 
+        // Helper formatage monétaire conforme DGI (conserve jusqu'à 2 décimales si non nulles)
+        function formatMoneyLive(n) {
+            const v = parseFloat(n) || 0;
+            const hasDec = Math.abs(v % 1) > 0.001;
+            return v.toLocaleString('fr-FR', {
+                minimumFractionDigits: hasDec ? 2 : 0,
+                maximumFractionDigits: 2
+            }) + ' FCFA';
+        }
+
         // 12. CALCUL DE SYNTHÈSE FISCALE EN TEMPS RÉEL (Conforme DGI SECeF ST 1.0)
         function calculerSyntheseLive() {
             let totalBrutHt = 0;
+            let totalRemiseLignes = 0;
             let totalTs = 0;
             let totalTva = 0;
             let basePsvbBiens = 0;
 
-            const remiseType = $('input[name="remise_type"]:checked').val() || 'POURCENTAGE';
-            const remiseVal = parseFloat($('#facture_remise_valeur').val()) || 0;
             const bicSelected = $('#bic_id option:selected');
             const bicTaux = parseFloat(bicSelected.data('taux')) || 0;
 
@@ -3247,6 +3400,8 @@
                 const prodId = $(this).find('.base-taxable-select').val();
                 const qte = parseFloat($(this).find('.qte-input').val()) || 0;
                 const puSaisi = parseFloat($(this).find('.prix-input').val()) || 0;
+                const remVal = parseFloat($(this).find('.remise-val-input').val()) || 0;
+                const remType = $(this).find('.remise-type-select').val() || 'POURCENTAGE';
 
                 if (qte > 0 && puSaisi >= 0) {
                     const prodInfo = productsCatalog[String(prodId)] || {};
@@ -3258,25 +3413,52 @@
 
                     let puHt = $(this).data('pu-ht');
                     if (puHt === undefined || isNaN(puHt) || puHt <= 0) {
-                        let puHorsTs = puSaisi;
-                        if (typeTs === 'MONTANT') {
-                            puHorsTs = Math.max(0, puSaisi - mntTs);
-                        }
-                        const diviseur = 1 + (tauxTva / 100) + (typeTs === 'POURCENTAGE' ? (pctTs / 100) : 0);
-                        puHt = currentModePrix === 'TTC' ? (diviseur > 0 ? (puHorsTs / diviseur) : puSaisi) : puSaisi;
-                        $(this).data('pu-ht', puHt);
+                        puHt = (currentModePrix === 'TTC') ? calculerPuHt(puSaisi, prodInfo) : puSaisi;
+                        $(this).data('pu-ht', puHt).attr('data-pu-ht', puHt);
                     }
-                    const rowHt = puHt * qte;
+                    const rowBrutHt = puHt * qte;
+                    let rowRemise = 0;
+                    if (remVal > 0 && rowBrutHt > 0) {
+                        if (remType === 'MONTANT') {
+                            const remHt = (currentModePrix === 'TTC') ? (remVal / (1 + tauxTva / 100)) : remVal;
+                            rowRemise = Math.min(rowBrutHt, Math.max(0, remHt));
+                        } else {
+                            rowRemise = rowBrutHt * (Math.min(100, Math.max(0, remVal)) / 100);
+                        }
+                    }
+                    const rowNetHt = Math.max(0, rowBrutHt - rowRemise);
 
-                    totalBrutHt += rowHt;
-                    const displayLineMnt = currentModePrix === 'TTC' ? (puSaisi * qte) : rowHt;
-                    $(this).find('.montant-cell').text(Math.round(displayLineMnt).toLocaleString('fr-FR') + ' FCFA');
+                    // Taxe spécifique unitaire et totale de la ligne
+                    let itemTs = 0;
+                    if (typeTs === 'MONTANT') {
+                        itemTs = qte * mntTs;
+                    } else if (typeTs === 'POURCENTAGE') {
+                        itemTs = rowNetHt * (pctTs / 100);
+                    }
+
+                    totalBrutHt += rowBrutHt;
+                    totalRemiseLignes += rowRemise;
+
+                    // Affichage dans la cellule Total Ligne :
+                    // En HT : Total HT avec Taxe Spécifique incluse (conforme facture DGI)
+                    // En TTC : Total Toutes Taxes Comprises
+                    let displayLineMnt = 0;
+                    if (currentModePrix === 'TTC') {
+                        displayLineMnt = Math.round(((rowNetHt + itemTs) * (1 + tauxTva / 100)) * 100) / 100;
+                    } else {
+                        displayLineMnt = Math.round((rowNetHt + itemTs) * 100) / 100;
+                    }
+                    $(this).find('.montant-cell').text(formatNumberLive(displayLineMnt));
 
                     lineItems.push({
                         prodId: prodId,
                         qte: qte,
                         puSaisi: puSaisi,
-                        rowHt: rowHt,
+                        puHt: puHt,
+                        rowBrutHt: rowBrutHt,
+                        rowRemise: rowRemise,
+                        rowNetHt: rowNetHt,
+                        rowTs: itemTs,
                         is_service: isService,
                         taux_tva: tauxTva,
                         type_ts: typeTs,
@@ -3286,60 +3468,75 @@
                 }
             });
 
-            // Remise commerciale globale (pourcentage ou montant fixe)
-            let totalRemise = 0;
-            if (remiseType === 'MONTANT') {
-                totalRemise = Math.min(totalBrutHt, Math.max(0, remiseVal));
-            } else {
-                const pct = Math.min(100, Math.max(0, remiseVal));
-                totalRemise = totalBrutHt * (pct / 100);
+            // Remise commerciale globale additionnelle de pied de facture
+            const globalRemiseType = $('input[name="global_remise_type"]:checked').val() || 'POURCENTAGE';
+            const globalRemiseVal = parseFloat($('#facture_remise_valeur').val()) || 0;
+            const netAvantRemiseGlobale = Math.max(0, totalBrutHt - totalRemiseLignes);
+
+            let globalRemise = 0;
+            if (globalRemiseVal > 0 && netAvantRemiseGlobale > 0) {
+                if (globalRemiseType === 'MONTANT') {
+                    globalRemise = Math.min(netAvantRemiseGlobale, Math.max(0, globalRemiseVal));
+                } else {
+                    const pct = Math.min(100, Math.max(0, globalRemiseVal));
+                    globalRemise = netAvantRemiseGlobale * (pct / 100);
+                }
             }
-            $('#facture_remise_1').val(totalRemise.toFixed(2));
+
+            const totalRemise = totalRemiseLignes + globalRemise;
+            // #facture_remise_1 stocke STRICTEMENT la remise globale de pied de facture (ou 0 si aucune remise globale)
+            $('#facture_remise_1').val(globalRemise > 0 ? globalRemise.toFixed(2) : 0);
             const netHt = Math.max(0, totalBrutHt - totalRemise);
-            const discountRatio = totalBrutHt > 0 ? (totalRemise / totalBrutHt) : 0;
+            const globalDiscountRatio = netAvantRemiseGlobale > 0 ? (globalRemise / netAvantRemiseGlobale) : 0;
 
             // Calcul TS, TVA et Base PSVB par ligne
             lineItems.forEach(item => {
-                const itemNetHt = item.rowHt * (1 - discountRatio);
+                const itemNetFinalHt = item.rowNetHt * (1 - globalDiscountRatio);
 
                 // TS (Taxe Spécifique)
                 let itemTs = 0;
                 if (item.type_ts === 'MONTANT') {
                     itemTs = item.qte * item.montant_ts;
                 } else if (item.type_ts === 'POURCENTAGE') {
-                    itemTs = itemNetHt * (item.pourcentage_ts / 100);
+                    itemTs = itemNetFinalHt * (item.pourcentage_ts / 100);
                 }
                 totalTs += itemTs;
 
                 // TVA légale (sur base HT nette + TS)
-                const baseTva = itemNetHt + itemTs;
+                const baseTva = itemNetFinalHt + itemTs;
                 const itemTva = baseTva * (item.taux_tva / 100);
                 totalTva += itemTva;
 
                 // Acompte PSVB : STRICTEMENT sur les biens matériels, prestations EXONÉRÉES
                 if (!item.is_service) {
-                    basePsvbBiens += (itemNetHt + itemTs + itemTva);
+                    basePsvbBiens += (itemNetFinalHt + itemTs + itemTva);
                 }
             });
 
             const totalPsvb = basePsvbBiens * (bicTaux / 100);
-            const netAPayer = Math.round(netHt + totalTs + totalTva + totalPsvb);
+            const netAPayer = Math.round((netHt + totalTs + totalTva + totalPsvb) * 100) / 100;
             currentNetAPayer = netAPayer;
 
-            // Affichage dans la synthèse (sans décimales inutiles en FCFA)
-            $('#liveBrutHt').text(Math.round(totalBrutHt).toLocaleString('fr-FR') + ' FCFA');
-            $('#liveRemise').text(totalRemise > 0 ? '- ' + Math.round(totalRemise).toLocaleString('fr-FR') + ' FCFA' : '0 FCFA');
-            $('#liveNetHt').text(Math.round(netHt).toLocaleString('fr-FR') + ' FCFA');
-            $('#liveTs').text(Math.round(totalTs).toLocaleString('fr-FR') + ' FCFA');
-            $('#liveTva').text(Math.round(totalTva).toLocaleString('fr-FR') + ' FCFA');
-            $('#livePsvb').text(Math.round(totalPsvb).toLocaleString('fr-FR') + ' FCFA');
-            $('#liveNetAPayer').text(Math.round(netAPayer).toLocaleString('fr-FR') + ' FCFA');
+            // Affichage dans la synthèse avec précision à 2 décimales si non nulles
+            $('#liveBrutHt').text(formatMoneyLive(totalBrutHt));
+            $('#liveRemise').text(totalRemise > 0 ? '- ' + formatMoneyLive(totalRemise) : '0 FCFA');
+            $('#liveNetHt').text(formatMoneyLive(netHt));
+            $('#liveTs').text(formatMoneyLive(totalTs));
+            $('#liveTva').text(formatMoneyLive(totalTva));
+            $('#livePsvb').text(formatMoneyLive(totalPsvb));
+            $('#liveNetAPayer').text(formatMoneyLive(netAPayer));
 
             // Ajustement des règlements selon la condition choisie
             let totalModes = 0;
-            if ($('.paiement-row').length === 1) {
-                $('#paiementsContainer tr.paiement-row:first .reglement-montant-input').val(netAPayer);
-                totalModes = netAPayer;
+            if (currentConditionReglement === 'COMPTANT') {
+                if ($('.paiement-row').length === 1) {
+                    $('#paiementsContainer tr.paiement-row:first .reglement-montant-input').val(netAPayer.toFixed(2));
+                    totalModes = netAPayer;
+                } else {
+                    $('.reglement-montant-input').each(function() {
+                        totalModes += parseFloat($(this).val()) || 0;
+                    });
+                }
             } else {
                 $('.reglement-montant-input').each(function() {
                     totalModes += parseFloat($(this).val()) || 0;
@@ -3356,20 +3553,22 @@
                 totalRegle = parseFloat($('#acompte_montant').val()) || 0;
             }
 
-            const reste = Math.max(0, netAPayer - Math.round(totalRegle));
-            $('#liveTotalPaye').text(Math.round(totalRegle).toLocaleString('fr-FR') + ' FCFA');
-            $('#liveResteAPayer').text(Math.round(reste).toLocaleString('fr-FR') + ' FCFA');
+            const reste = Math.max(0, Math.round((netAPayer - totalRegle) * 100) / 100);
+            $('#liveTotalPaye').text(formatMoneyLive(totalRegle));
+            $('#liveResteAPayer').text(formatMoneyLive(reste));
 
-            const modesRound = Math.round(totalModes);
-            if (modesRound === netAPayer) {
+            const modesVal = Math.round(totalModes * 100) / 100;
+            const netVal = Math.round(netAPayer * 100) / 100;
+            const diff = Math.round((netVal - modesVal) * 100) / 100;
+
+            if (Math.abs(diff) <= 0.50) {
                 let badgeTxt = (currentConditionReglement === 'CREDIT') ? 'Modes convenus conformes (Vente à terme)' : 'Égalité Stricte DGI';
-                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-success-subtle text-success border border-success-subtle fw-semibold"><span><i class="fas fa-check-circle me-1"></i> Somme des modes de paiement convenus égale au Net TTC (' + Number(netAPayer).toLocaleString('fr-FR') + ' FCFA)</span><span class="badge bg-success">' + badgeTxt + '</span></div>');
-            } else if (modesRound < netAPayer) {
-                const diff = netAPayer - modesRound;
-                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-info-subtle text-info-emphasis border border-info-subtle fw-semibold"><span><i class="fas fa-info-circle me-1"></i> Total modes convenus : ' + Number(modesRound).toLocaleString('fr-FR') + ' FCFA &bull; Écart à répartir : ' + Number(diff).toLocaleString('fr-FR') + ' FCFA</span><span class="badge bg-secondary">Ajustez les montants</span></div>');
+                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-success-subtle text-success border border-success-subtle fw-semibold"><span><i class="fas fa-check-circle me-1"></i> Somme des modes de paiement convenus égale au Net TTC (' + formatMoneyLive(netVal) + ')</span><span class="badge bg-success">' + badgeTxt + '</span></div>');
+            } else if (diff > 0) {
+                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-info-subtle text-info-emphasis border border-info-subtle fw-semibold"><span><i class="fas fa-info-circle me-1"></i> Total modes convenus : ' + formatMoneyLive(modesVal) + ' &bull; Écart à répartir : ' + formatMoneyLive(diff) + '</span><span class="badge bg-secondary">Ajustez les montants</span></div>');
             } else {
-                const surplus = modesRound - netAPayer;
-                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-danger-subtle text-danger border border-danger-subtle fw-semibold"><span><i class="fas fa-exclamation-triangle me-1"></i> Dépassement : la somme des modes dépasse le Net TTC de ' + Number(surplus).toLocaleString('fr-FR') + ' FCFA</span><span class="badge bg-danger">Ajustez les montants</span></div>');
+                const surplus = Math.abs(diff);
+                $('#paiementBalanceNotice').html('<div class="d-flex align-items-center justify-content-between p-2 rounded bg-danger-subtle text-danger border border-danger-subtle fw-semibold"><span><i class="fas fa-exclamation-triangle me-1"></i> Dépassement : la somme des modes dépasse le Net TTC de ' + formatMoneyLive(surplus) + '</span><span class="badge bg-danger">Ajustez les montants</span></div>');
             }
 
             // Mettre à jour modepaie_id avec le premier mode
@@ -3460,7 +3659,7 @@
             }
 
             // Écouter les changements pour recalculer la synthèse fiscale et valider les boutons
-            $(document).on('input change', '.qte-input, .prix-input, .base-taxable-select, #facture_remise_valeur, input[name="remise_type"], #bic_id, #contribuable_id, #typefacture_id, #modepaie_id', function() {
+            $(document).on('input change', '.qte-input, .prix-input, .base-taxable-select, .remise-val-input, .remise-type-select, #facture_remise_valeur, input[name="global_remise_type"], #bic_id, #contribuable_id, #typefacture_id, #modepaie_id', function() {
                 calculerSyntheseLive();
                 validerChampsObligatoires();
             });
@@ -3470,21 +3669,15 @@
                 const $row = $(this).closest('.element-row');
                 const prodId = $row.find('.base-taxable-select').val();
                 const prodInfo = productsCatalog[String(prodId)] || {};
-                const tauxTva = parseFloat(prodInfo.taux_tva) || 0;
                 const val = parseFloat($(this).val()) || 0;
-
-                let tsUnit = 0;
-                if (prodInfo.type_ts === 'MONTANT') tsUnit = parseFloat(prodInfo.montant_ts) || 0;
-                else if (prodInfo.type_ts === 'POURCENTAGE') tsUnit = val * ((parseFloat(prodInfo.pourcentage_ts) || 0) / 100);
 
                 if (currentModePrix === 'HT') {
                     $row.data('pu-ht', val).attr('data-pu-ht', val);
-                    const ttc = Math.round(((val + tsUnit) * (1 + tauxTva / 100)) * 100) / 100;
+                    const ttc = calculerPuTtc(val, prodInfo);
                     $row.data('pu-ttc', ttc).attr('data-pu-ttc', ttc);
                 } else {
                     $row.data('pu-ttc', val).attr('data-pu-ttc', val);
-                    const div = 1 + tauxTva / 100;
-                    const ht = div > 0 ? Math.round(((val - tsUnit) / div) * 100) / 100 : val;
+                    const ht = calculerPuHt(val, prodInfo);
                     $row.data('pu-ht', ht).attr('data-pu-ht', ht);
                 }
             });

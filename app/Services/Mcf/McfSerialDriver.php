@@ -686,9 +686,11 @@ class McfSerialDriver
         }
 
         $payload = "{$nomDesc}{$tab}{$itemInfo}";
+        Log::info("McfSerialDriver: Envoi commande 31h (Article)", ['payload' => $payload]);
         $reponse = $this->envoyerCommande(self::CMD_ARTICLE, $payload);
 
         if (str_starts_with($reponse, 'E:')) {
+            Log::error("McfSerialDriver: Erreur sur commande 31h", ['payload' => $payload, 'erreur' => substr($reponse, 2)]);
             return ['succes' => false, 'erreur' => substr($reponse, 2)];
         }
 

@@ -14,7 +14,7 @@ class TypefactureSeeder extends Seeder
      */
     public function run()
     {
-        // FEC 05 §1.7 — codes métier. Bridge MCF: FV|FA|EV|EA (FT/ET mappés en FV/EV).
+        // FEC 05 §1.7 — codes métier & boîtier MCF: FV, FT, EV, ET, FA, EA (SECeF ST 1.0).
         $types = [
             ['code' => 'FV', 'libelle' => 'Facture de vente'],
             ['code' => 'FT', 'libelle' => 'Facture d\'acompte'],

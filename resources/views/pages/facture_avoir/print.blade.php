@@ -747,6 +747,21 @@
             </div>
         </div>
 
+        @php
+            $formatMonnaie = function($val) {
+                $val = (float) $val;
+                $hasDecimals = abs($val - round($val)) > 0.001;
+                return number_format($val, $hasDecimals ? 2 : 0, ',', ' ');
+            };
+            $formatQte = function($qte) {
+                $qte = (float) $qte;
+                if ($qte == (int)$qte) {
+                    return number_format($qte, 0, ',', ' ');
+                }
+                return rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',');
+            };
+        @endphp
+
         <!-- 3. Tableau des Articles -->
         <table class="invoice-items">
             <thead>
@@ -765,7 +780,8 @@
                     @php
                         $qte = (float) $el->quantite;
                         $pu  = (float) $el->prix_unitaire;
-                        $ligneBrut = $qte * $pu;
+                        $remiseLigne = (float) ($el->calculated_remise ?? 0);
+                        $ligneBrut = max(0, round(($qte * $pu) - $remiseLigne, 2));
                         $tauxTva = (float) optional(optional($el->Produit)->tva)->taux ?? 0;
                         $desig = optional($el->Produit)->designation ?? 'Article';
                         $codeProd = optional($el->Produit)->code;
@@ -783,10 +799,10 @@
                                 <small class="text-muted font-mono" style="font-size: 8px;">Code : {{ $codeProd }}</small>
                             @endif
                         </td>
-                        <td class="text-center fw-bold">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
-                        <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
+                        <td class="text-center fw-bold">{{ $formatQte($qte) }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($pu) }}</td>
                         <td class="text-center font-mono">{{ $tauxTva > 0 ? $tauxTva.'%' : '0%' }}</td>
-                        <td class="text-end font-mono fw-bold">{{ number_format($ligneBrut, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($ligneBrut) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -809,16 +825,16 @@
                         @foreach($tva_groups as $grp => $info)
                         <tr>
                             <td class="fw-bold">TVA ({{ $info['taux'] }}%)</td>
-                            <td class="text-end font-mono">{{ number_format($info['base'], 0, ',', ' ') }}</td>
+                            <td class="text-end font-mono">{{ $formatMonnaie($info['base']) }}</td>
                             <td class="text-center">{{ $info['taux'] > 0 ? $info['taux'].'%' : '0%' }}</td>
-                            <td class="text-end font-mono fw-bold">{{ number_format($info['taxe'], 0, ',', ' ') }}</td>
+                            <td class="text-end font-mono fw-bold">{{ $formatMonnaie($info['taxe']) }}</td>
                         </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
                         <tr>
                             <td colspan="3" class="text-end">TOTAL TVA DÉDUCTIBLE :</td>
-                            <td class="text-end font-mono fw-bold">{{ number_format($total_taxe, 0, ',', ' ') }}</td>
+                            <td class="text-end font-mono fw-bold">{{ $formatMonnaie($total_taxe) }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -833,31 +849,31 @@
                 <table class="finance-table">
                     <tr>
                         <td>Total Brut HT</td>
-                        <td class="text-end font-mono">{{ number_format($total_ht, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($total_ht) }}</td>
                     </tr>
                     @if($remise_totale > 0)
                     <tr>
                         <td class="text-danger">Remises déduites</td>
-                        <td class="text-end font-mono text-danger">- {{ number_format($remise_totale, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono text-danger">- {{ $formatMonnaie($remise_totale) }}</td>
                     </tr>
                     @endif
                     <tr class="highlight-row">
                         <td>Total Net HT</td>
-                        <td class="text-end font-mono fw-bold">{{ number_format($net_commercial, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($net_commercial) }}</td>
                     </tr>
                     <tr>
                         <td>TVA Régularisée</td>
-                        <td class="text-end font-mono">{{ number_format($total_taxe, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($total_taxe) }}</td>
                     </tr>
                     @if(!empty($total_bic) && $total_bic > 0)
                     <tr>
                         <td>Acompte BIC / PSVB</td>
-                        <td class="text-end font-mono text-warning">{{ number_format($total_bic, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono text-warning">{{ $formatMonnaie($total_bic) }}</td>
                     </tr>
                     @endif
                     <tr class="grand-total-row">
                         <td>TOTAL NET À DÉDUIRE</td>
-                        <td class="text-end font-mono">- {{ number_format($montant_total, 0, ',', ' ') }} FCFA</td>
+                        <td class="text-end font-mono">- {{ $formatMonnaie($montant_total) }} FCFA</td>
                     </tr>
                 </table>
             </div>
