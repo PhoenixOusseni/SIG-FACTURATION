@@ -88,6 +88,14 @@
             'FT' => "FACTURE D'ACOMPTE OU D'AVANCE",
             default => 'FACTURE DE VENTE',
         };
+        $currentModePrix = $mode_prix ?? 'HT';
+        if (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) {
+            $notesArr = json_decode($facture->notes, true);
+            if (!empty($notesArr['mode_prix'])) {
+                $currentModePrix = strtoupper($notesArr['mode_prix']);
+            }
+        }
+        $isHtMode = ($currentModePrix === 'HT');
     @endphp
 
     <!-- En-tête Entreprise -->
@@ -172,8 +180,8 @@
             <tr>
                 <th class="text-start" style="width: 42%;">Désignation</th>
                 <th class="text-center" style="width: 12%;">Qté</th>
-                <th class="text-end" style="width: 23%;">P.U.</th>
-                <th class="text-end" style="width: 23%;">Total</th>
+                <th class="text-end" style="width: 23%;">P.U. {{ $isHtMode ? 'HT' : 'TTC' }}</th>
+                <th class="text-end" style="width: 23%;">Total {{ $isHtMode ? 'HT' : 'TTC' }}</th>
             </tr>
         </thead>
         <tbody>
@@ -197,7 +205,17 @@
                         }
                     }
                     $tsLigne = round($tsUnit * $qte, 2);
-                    $ligneTotal = round($ligneNet + $tsLigne, 2);
+                    $totalLigneHt = round($ligneNet + $tsLigne, 2);
+
+                    if ($isHtMode) {
+                        $puDisplay = $pu;
+                        $remiseDisplay = $remiseLigne;
+                        $ligneTotalDisplay = $totalLigneHt;
+                    } else {
+                        $puDisplay = round(($pu + $tsUnit) * (1 + $tauxTva / 100.0), 2);
+                        $remiseDisplay = round($remiseLigne * (1 + $tauxTva / 100.0), 2);
+                        $ligneTotalDisplay = round($totalLigneHt * (1 + $tauxTva / 100.0), 2);
+                    }
                 @endphp
                 <tr>
                     <td class="text-start">
@@ -205,12 +223,14 @@
                         <div style="font-size: 8.5px; color: #444;">
                             [{{ $grpTva }} - {{ $tauxTva > 0 ? $tauxTva.'%' : 'EX' }}]
                             @if($tsUnit > 0) +TS {{ $formatMonnaie($tsLigne) }}@endif
-                            @if($remiseLigne > 0) <span style="color: #dc2626;">(Rem: -{{ $formatMonnaie($remiseLigne) }})</span>@endif
+                            @if($remiseLigne > 0)
+                                <span style="color: #dc2626;">(Rem: -{{ $formatMonnaie($remiseDisplay) }}@if($el->remise_type === 'POURCENTAGE' && (float)$el->remise_valeur > 0) [{{ rtrim(rtrim(number_format((float)$el->remise_valeur, 2, ',', ' '), '0'), ',') }}%]@endif)</span>
+                            @endif
                         </div>
                     </td>
                     <td class="text-center">{{ $formatQte($qte) }}</td>
-                    <td class="text-end">{{ $formatMonnaie($pu) }}</td>
-                    <td class="text-end fw-bold">{{ $formatMonnaie($ligneTotal) }}</td>
+                    <td class="text-end">{{ $formatMonnaie($puDisplay) }}</td>
+                    <td class="text-end fw-bold">{{ $formatMonnaie($ligneTotalDisplay) }}</td>
                 </tr>
             @endforeach
         </tbody>

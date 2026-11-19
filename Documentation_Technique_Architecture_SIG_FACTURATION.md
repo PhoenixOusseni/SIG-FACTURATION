@@ -189,7 +189,10 @@ Conformément à l'exigence réglementaire SECeF stipulant que le SFE doit pouvo
 ### 3.7 Gestion des Réductions Commerciales par Article (Ligne)
 - **Saisie par Ligne** : Chaque article dispose d'une remise configurable soit en **pourcentage** (`%`), soit en **montant fixe** (`FCFA`).
 - **Cascade Fiscale** : La remise de ligne s'applique immédiatement sur le brut HT de l'article ($\text{Net HT} = \text{Qté} \times \text{PU} - \text{Remise Ligne}$). Toute remise globale additionnelle de pied de facture est ensuite répartie au prorata sur la valeur nette résiduelle.
-- **Affichage sur Facture** : La colonne `REMISE` du tableau des articles affiche le montant exact déduit pour chaque article (ou `-` si aucune réduction).
+- **Affichage Intégral sur Facture & Ticket** : 
+  - La colonne `REMISE` affiche le montant monétaire déduit (ex: `- 420` en HT ou `- 495,60` en TTC).
+  - Lorsque la remise a été consentie en pourcentage, le taux appliqué est explicitement stipulé sous le montant (ex: `(-3%)` sur facture A4, ou `[-3%]` sur ticket de caisse), éliminant toute ambiguïté lors des contrôles fiscaux ou pour le client final.
+  - Dans la synthèse financière, si une remise globale additionnelle a été appliquée en pourcentage, son taux est également mentionné à côté du libellé *« Remises commerciales »*.
 
 ### 3.8 Précision Décimale DGI et Intégration de la Taxe Spécifique (TS)
 - **Règle des Décimales SECeF** :
@@ -202,7 +205,7 @@ Conformément à l'exigence réglementaire SECeF stipulant que le SFE doit pouvo
   - Dans le tableau récapitulatif fiscal DGI (`tva_groups`), la colonne `Base HT` intègre la TS (ex: pour une vente de 200 000 avec 2 000 de TS, la Base HT du Groupe B 18% est de **`202 000`** et la TVA est de **`36 360`**).
   - La synthèse financière de droite fait ressortir la **Total Base Imposable HT** en parfaite concordance arithmétique avec le tableau de TVA.
 
-### 3.9 Types de Factures MCF (`FT`/`ET`), Balancement des Paiements et Mode Prix HT/TTC
+### 3.9 Types de Factures MCF (`FT`/`ET`), Balancement des Paiements et Dualité des Modes de Prix (HT / TTC)
 - **Transmission Intégrale des Types de Factures au Boîtier MCF** :
   - Le SFE transmet désormais au boîtier MCF la totalité des types prévus par le protocole DGI SECeF ST 1.0 :
     - `FV` : Facture de vente locale au comptant.
@@ -218,15 +221,42 @@ Conformément à l'exigence réglementaire SECeF stipulant que le SFE doit pouvo
   - Commande `35h` & `38h` : Mode de remboursement et clôture avec signature cryptographique et QR Code officiel.
 - **Résolution des Dépassements de Centimes sur les Règlements & Équilibrage DGI** :
   - La comparaison entre la somme des modes de paiement et le Net TTC à payer applique désormais une précision à deux décimales flottantes avec une marge de tolérance d'epsilon ($|\text{Total Modes} - \text{Net TTC}| \le 0{,}50\text{ FCFA}$). Cela élimine tout blocage intempestif ou faux message d'écart (ex: « Dépassement de 0,3 FCFA »).
+  - Synchronisation automatique pour les ventes au comptant (`COMPTANT`) : le montant du règlement est rigoureusement aligné sur le Net à Payer de la facture, garantissant un reste à payer strictement égal à 0 FCFA.
   - Les champs de saisie des règlements (`reglement_montant[]` et `acompte_montant`) adoptent l'attribut HTML5 `step="0.01"`, autorisant la saisie de centimes sans déclencher de popup d'arrondi forcé du navigateur.
-- **Isolation Stricte des Remises par Article et Remises Globales** :
-  - Le champ `factures.remise_1` conserve strictement le montant de la remise commerciale globale de pied de facture. Les remises par article sont portées au niveau ligne (`remise_valeur`, `remise_type`, `remise_montant`).
-  - Cette dissociation élimine tout risque de double déduction au moment de la signature et garantit la cohérence mathématique absolue des montants soumis à la commande 31h du boîtier MCF Eltrade CC300, prévenant l'erreur `31h : La taxe est incorrecte!`.
-- **Formules Algébriques Déterministes de Conversion HT <-> TTC** :
-  - En présence de Taxe Spécifique (TS), la formule de rétro-calcul depuis un prix TTC saisi rétablit la stricte assiette de TVA sans dérive :
+- **Dualité Cohérente des Colonnes selon le Mode Prix Choisi (HT vs TTC)** :
+  - **En Mode Prix HT** :
+    - Les en-têtes affichent `P.U. HT` et `Total HT`.
+    - Les cellules contiennent : le prix unitaire HT, la réduction commerciale HT, et la base imposable nette HT de la ligne ($(\text{Qté} \times \text{PU HT}) + \text{TS} - \text{Remise}$).
+  - **En Mode Prix TTC** :
+    - Les en-têtes basculent sur `P.U. TTC` et `Total TTC`.
+    - Les cellules affichent les montants TTC exacts toutes taxes comprises :
+      $$\text{PU TTC} = (\text{PU HT} + \text{TS}_{\text{unitaire}}) \times (1 + \text{TVA})$$
+      $$\text{Remise TTC} = \text{Remise HT} \times (1 + \text{TVA})$$
+      $$\text{Total Ligne TTC} = \text{Total Ligne HT} \times (1 + \text{TVA})$$
+    - La somme des `Total TTC` des lignes coïncide à la perfection avec le `NET À PAYER` au bas du document, supprimant toute contradiction visuelle.
+  - Dans les deux modes, le tableau récapitulatif fiscal DGI (`tva_groups`) détaille la Base Imposable HT légale et la TVA collectée, garantissant le respect sans faille des règles de l'audit DGI.
+- **Formules Algébriques Déterministes de Rétro-calcul (TTC -> HT)** :
+  - En présence de Taxe Spécifique (TS), le rétro-calcul déterministe prévient toute dérive d'arrondi :
     $$\text{PU HT} = \frac{\text{PU TTC}}{1 + \text{TVA}} - \text{TS}_{\text{montant}} = \frac{\text{PU TTC} - \text{TS}_{\text{montant}} \times (1 + \text{TVA})}{1 + \text{TVA}}$$
     $$\text{PU HT} = \frac{\text{PU TTC}}{(1 + \text{TS}_{\%}) \times (1 + \text{TVA})}$$
-  - Le système garantit que les prix unitaires persistés en base de données sont universellement normalisés en Hors Taxes (HT).
+  - Les prix unitaires persistés dans la base de données SQLite sont universellement normalisés en Hors Taxes (HT).
+
+### 3.10 Synthèse d'Homologation & Conformité SECeF ST 1.0 (Audit DGI)
+Le tableau ci-dessous récapitule la couverture exhaustive des exigences d'homologation :
+
+| Exigence Réglementaire DGI SECeF | Statut | Implémentation SIG-FACTURATION |
+| :--- | :---: | :--- |
+| **Précision prix (2 décimales) & quantités (3 décimales)** | Conforme | Validation regex & `step="0.001"`, calcul arithmétique direct sans troncature entière. |
+| **Arrondis des montants** | Conforme | Règle du demi au plus proche (`round(x, 2)`), conservation des centimes. |
+| **Intégration Taxe Spécifique (TS)** | Conforme | TS intégrée dans la base imposable de la TVA (`totalLigneHt = Net HT + TS`). |
+| **Remise par article & globale** | Conforme | Saisie en `%` ou `FCFA` par ligne ; affichage du taux `(-X%)` et montant sur facture et ticket. |
+| **Dualité Mode Prix HT / Mode Prix TTC** | Conforme | En-têtes et cellules synchronisés en HT ou TTC avec concordance totale sur le Net à Payer. |
+| **Balancement règlements & acomptes** | Conforme | Tolérance epsilon 0,50 FCFA ; synchronisation automatique du règlement comptant. |
+| **Types documents MCF complets** | Conforme | Support natif et transmission matérielle de `FV`, `FT`, `EV`, `ET`, `FA`, `EA`. |
+| **Avoirs RRR financiers vs RAM retours** | Conforme | RRR rattaché à `LOCSER` sans mouvement stock ; RAM avec réintégration stock magasin. |
+| **8 Lignes de commentaires DGI (A à H)** | Conforme | Lignes A (*Réf. exo*), B (*Base juridique*), C à H persistées en JSON et imprimées. |
+| **Gestion du DUPLICATA légal** | Conforme | Horodatage `first_printed_at`, compteur d'impressions, filigrane et badge rouge. |
+| **Rapports statistiques X & Z (Norme 4.3)** | Conforme | Points g, h, i, j, k (RRR), l (Autres réductions) et m (Brouillons/Incomplètes) détaillés. |
 
 ---
 

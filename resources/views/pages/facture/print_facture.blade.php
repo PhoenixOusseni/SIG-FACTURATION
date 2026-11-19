@@ -652,13 +652,14 @@
             default => 'FACTURE DE VENTE',
         };
         $isVenteExoneree = ($total_taxe == 0);
-        $isHtMode = true;
+        $currentModePrix = $mode_prix ?? 'HT';
         if (!empty($facture->notes) && str_starts_with(trim($facture->notes), '{')) {
             $notesArr = json_decode($facture->notes, true);
-            if (isset($notesArr['mode_prix'])) {
-                $isHtMode = ($notesArr['mode_prix'] === 'HT');
+            if (!empty($notesArr['mode_prix'])) {
+                $currentModePrix = strtoupper($notesArr['mode_prix']);
             }
         }
+        $isHtMode = ($currentModePrix === 'HT');
     @endphp
 
     <div class="invoice-wrapper">
@@ -834,6 +835,21 @@
                         $tsLigne = round($tsUnit * $qte, 2);
                         // Base imposable légale HT de la ligne DGI (Net HT + TS)
                         $totalLigneHt = round($ligneNet + $tsLigne, 2);
+
+                        // Adaptation selon le mode d'affichage des prix (HT ou TTC)
+                        if ($isHtMode) {
+                            $puDisplay = $pu;
+                            $remiseDisplay = $remiseLigne;
+                            $totalLineDisplay = $totalLigneHt;
+                        } else {
+                            // En mode TTC :
+                            // P.U. TTC = (PU HT + TS unitaire) * (1 + TVA)
+                            $puDisplay = round(($pu + $tsUnit) * (1 + $tauxTva / 100.0), 2);
+                            // Remise TTC = Remise HT * (1 + TVA)
+                            $remiseDisplay = round($remiseLigne * (1 + $tauxTva / 100.0), 2);
+                            // Total Ligne TTC = Total Ligne HT * (1 + TVA)
+                            $totalLineDisplay = round($totalLigneHt * (1 + $tauxTva / 100.0), 2);
+                        }
                         $labelFiscal = $prod ? $prod->label_fiscal : ($el->designation ?? optional($el->Produit)->designation ?? 'Article');
                     @endphp
                     <tr>
@@ -845,16 +861,19 @@
                             @endif
                         </td>
                         <td class="text-center fw-bold">{{ $formatQte($qte) }}</td>
-                        <td class="text-end font-mono">{{ $formatMonnaie($pu) }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($puDisplay) }}</td>
                         <td class="text-end font-mono text-muted">{{ $tsLigne > 0 ? $formatMonnaie($tsLigne) : '-' }}</td>
                         <td class="text-end font-mono">
                             @if($remiseLigne > 0)
-                                <span class="text-danger">- {{ $formatMonnaie($remiseLigne) }}</span>
+                                <div class="text-danger fw-bold">- {{ $formatMonnaie($remiseDisplay) }}</div>
+                                @if($el->remise_type === 'POURCENTAGE' && (float)$el->remise_valeur > 0)
+                                    <div style="font-size: 8.5px; color: #475569; font-weight: normal; margin-top: 1px;">(-{{ rtrim(rtrim(number_format((float)$el->remise_valeur, 2, ',', ' '), '0'), ',') }}%)</div>
+                                @endif
                             @else
                                 <span class="text-muted">-</span>
                             @endif
                         </td>
-                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($totalLigneHt) }}</td>
+                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($totalLineDisplay) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -901,7 +920,18 @@
                     </tr>
                     @if($remise_totale > 0)
                     <tr>
-                        <td class="text-danger">Remises commerciales</td>
+                        <td class="text-danger">
+                            Remises commerciales
+                            @php
+                                $pctGlobal = null;
+                                if (!empty($rawNotesPrint['global_remise_type']) && $rawNotesPrint['global_remise_type'] === 'POURCENTAGE' && !empty($rawNotesPrint['global_remise_valeur'])) {
+                                    $pctGlobal = (float) $rawNotesPrint['global_remise_valeur'];
+                                }
+                            @endphp
+                            @if($pctGlobal && $pctGlobal > 0)
+                                <small style="font-size: 8.5px; color: #dc2626; font-weight: 500;">(-{{ rtrim(rtrim(number_format($pctGlobal, 2, ',', ' '), '0'), ',') }}%)</small>
+                            @endif
+                        </td>
                         <td class="text-end font-mono text-danger">- {{ $formatMonnaie($remise_totale) }}</td>
                     </tr>
                     @endif

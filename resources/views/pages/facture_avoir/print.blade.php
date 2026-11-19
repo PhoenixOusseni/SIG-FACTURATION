@@ -647,6 +647,12 @@
         if (!empty($facture_avoir->notes) && str_starts_with(trim($facture_avoir->notes), '{')) {
             $notesData = json_decode($facture_avoir->notes, true) ?: [];
         }
+        $isHtMode = true;
+        if (!empty($notesData['mode_prix'])) {
+            $isHtMode = ($notesData['mode_prix'] === 'HT');
+        } elseif (!empty($mode_prix)) {
+            $isHtMode = ($mode_prix === 'HT');
+        }
     @endphp
 
     <div class="invoice-wrapper">
@@ -769,9 +775,9 @@
                     <th style="width: 4%;" class="text-center">#</th>
                     <th style="width: 50%;">Article / Prestation</th>
                     <th class="text-center" style="width: 8%;">Qté</th>
-                    <th class="text-end" style="width: 14%;">P.U. HT</th>
+                    <th class="text-end" style="width: 14%;">P.U. {{ $isHtMode ? 'HT' : 'TTC' }}</th>
                     <th class="text-center" style="width: 10%;">TVA</th>
-                    <th class="text-end" style="width: 14%;">Total HT</th>
+                    <th class="text-end" style="width: 14%;">Total {{ $isHtMode ? 'HT' : 'TTC' }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -785,6 +791,8 @@
                         $tauxTva = (float) optional(optional($el->Produit)->tva)->taux ?? 0;
                         $desig = optional($el->Produit)->designation ?? 'Article';
                         $codeProd = optional($el->Produit)->code;
+                        $puDisplay = $isHtMode ? $pu : round($pu * (1 + $tauxTva / 100.0), 2);
+                        $totalDisplay = $isHtMode ? $ligneBrut : round($ligneBrut * (1 + $tauxTva / 100.0), 2);
                         $labelFiscal = optional($el->Produit)->label_fiscal ?? $desig;
                         if ($facture_avoir->nature === 'RRR') {
                             $labelFiscal = !empty($notesData['rrr_designation']) ? $notesData['rrr_designation'] : ($facture_avoir->motif ?: 'Rabais, Remise ou Ristourne accordé');
@@ -800,9 +808,9 @@
                             @endif
                         </td>
                         <td class="text-center fw-bold">{{ $formatQte($qte) }}</td>
-                        <td class="text-end font-mono">{{ $formatMonnaie($pu) }}</td>
+                        <td class="text-end font-mono">{{ $formatMonnaie($puDisplay) }}</td>
                         <td class="text-center font-mono">{{ $tauxTva > 0 ? $tauxTva.'%' : '0%' }}</td>
-                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($ligneBrut) }}</td>
+                        <td class="text-end font-mono fw-bold">{{ $formatMonnaie($totalDisplay) }}</td>
                     </tr>
                 @endforeach
             </tbody>

@@ -517,6 +517,8 @@
                         $tauxTva = (float) optional(optional($el->Produit)->tva)->taux ?? 0;
                         $desig = $el->designation ?? optional($el->Produit)->designation ?? 'Article';
                         $codeProd = optional($el->Produit)->code;
+                        $puDisplay = $isHtMode ? $pu : round($pu * (1 + $tauxTva / 100.0), 2);
+                        $totalDisplay = $isHtMode ? $ligneBrut : round($ligneBrut * (1 + $tauxTva / 100.0), 2);
                     @endphp
                     <tr>
                         <td class="text-center font-mono text-muted">{{ $lineIdx++ }}</td>
@@ -527,9 +529,9 @@
                             @endif
                         </td>
                         <td class="text-center fw-bold">{{ (float)$qte == (int)$qte ? number_format($qte, 0, ',', ' ') : rtrim(rtrim(number_format($qte, 3, ',', ' '), '0'), ',') }}</td>
-                        <td class="text-end font-mono">{{ number_format($pu, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono">{{ number_format($puDisplay, 0, ',', ' ') }}</td>
                         <td class="text-center font-mono">{{ $tauxTva > 0 ? $tauxTva.'%' : '0% (Exo)' }}</td>
-                        <td class="text-end font-mono fw-bold">{{ number_format($ligneBrut, 0, ',', ' ') }}</td>
+                        <td class="text-end font-mono fw-bold">{{ number_format($totalDisplay, 0, ',', ' ') }}</td>
                     </tr>
                 @endforeach
             </tbody>
